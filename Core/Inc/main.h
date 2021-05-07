@@ -55,19 +55,36 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 void delay_us(int us);
+void PnP_init(void);
+void x_goto(int pos);
+void x_test(void);
+void switch_test(void);
+void reg_set(unsigned long int reg, unsigned long int value);
+void startup_delay(void);
+void reg_wr(unsigned long reg, unsigned long value);
+void Setup_A_interupt(void);
+void Setup_B_interupt(void);
+void Setup_user_button_led(void);
+void x_test_pos(void);
+unsigned long reg_rd(unsigned long reg);
+void x_goto_2(int pos_encoder_target);
+
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define USER_Btn_Pin GPIO_PIN_13
-#define USER_Btn_GPIO_Port GPIOC
 #define MCO_Pin GPIO_PIN_0
 #define MCO_GPIO_Port GPIOH
+#define LIM_Y_Pin GPIO_PIN_0
+#define LIM_Y_GPIO_Port GPIOC
 #define RMII_MDC_Pin GPIO_PIN_1
 #define RMII_MDC_GPIO_Port GPIOC
 #define RMII_REF_CLK_Pin GPIO_PIN_1
 #define RMII_REF_CLK_GPIO_Port GPIOA
 #define RMII_MDIO_Pin GPIO_PIN_2
 #define RMII_MDIO_GPIO_Port GPIOA
+#define LIM_X_Pin GPIO_PIN_3
+#define LIM_X_GPIO_Port GPIOA
 #define RMII_CRS_DV_Pin GPIO_PIN_7
 #define RMII_CRS_DV_GPIO_Port GPIOA
 #define RMII_RXD0_Pin GPIO_PIN_4
@@ -76,6 +93,10 @@ void delay_us(int us);
 #define RMII_RXD1_GPIO_Port GPIOC
 #define LD1_Pin GPIO_PIN_0
 #define LD1_GPIO_Port GPIOB
+#define DIR_X_Pin GPIO_PIN_13
+#define DIR_X_GPIO_Port GPIOF
+#define CLK_X_Pin GPIO_PIN_9
+#define CLK_X_GPIO_Port GPIOE
 #define RMII_TXD1_Pin GPIO_PIN_13
 #define RMII_TXD1_GPIO_Port GPIOB
 #define LD3_Pin GPIO_PIN_14

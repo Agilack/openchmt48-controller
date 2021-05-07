@@ -27,7 +27,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef unsigned long u32;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -46,6 +46,11 @@ UART_HandleTypeDef huart3;
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* USER CODE BEGIN PV */
+
+static unsigned int pos_x;			//old X position without encoder
+static unsigned int encoder_pos_x;	//X position with encoder
+static unsigned int global_go=0;	//Used for test
+
 
 /* USER CODE END PV */
 
@@ -95,24 +100,38 @@ int main(void)
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_13);	//TURN ON BLUE LED
-  int pas=0;								//Counts iterations
-  int pas_cible=9524;						//Number of steps done by the program
-  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN OFF BLUE LED
+  //HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_13);	//Set X direction to left
 
-  HAL_Delay(3000);							//3s delay
-  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN ON BLUE LED
+  startup_delay();	//6 seconds delay with flashing LED
 
-  HAL_Delay(3000);
+
+
+
+
+
+
+
+  /* Activate SYSCFG */
+    RCC->APB2ENR|= (1 << 14);
+
+    Setup_user_button_led();
+    Setup_A_interupt();
+    Setup_B_interupt();
 
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+
+
+    PnP_init();			//Go to zero
+    delay_us(1000000); //1s delay
+    x_goto_2(9000);
   while (1)
   {
-	  pas=0;		//reset steps
+
 
 
 	  /*
@@ -124,29 +143,21 @@ int main(void)
 	  */
 
 
+	  //x_test();
+
+	  //switch_test();
+
+	  //x_test_pos();
 
 
-	  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//Change DIRECTION
-
-	  while(pas<=(pas_cible*2))
+	  if(global_go)			//Has User Button been pressed ?
 	  {
-
-
-	  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
-
-	  pas++;
-
-	  delay_us(250); //Choose the half-period in us of the signal. Lower = Faster motor
-
+		  x_goto_2(9000);
+		  global_go=0;
 	  }
 
-	  delay_us(2000000); //2s delay
-
-	  HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_13); 	//Change DIRECTION
 
 
-	  // HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_11);
-	 //  HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_14);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -175,7 +186,7 @@ void SystemClock_Config(void)
   * in the RCC_OscInitTypeDef structure.
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
@@ -301,19 +312,19 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD3_Pin|LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_12|DIR_X_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9|GPIO_PIN_11, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(CLK_X_GPIO_Port, CLK_X_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(USB_PowerSwitchOn_GPIO_Port, USB_PowerSwitchOn_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : USER_Btn_Pin */
-  GPIO_InitStruct.Pin = USER_Btn_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(USER_Btn_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin : LIM_Y_Pin */
+  GPIO_InitStruct.Pin = LIM_Y_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(LIM_Y_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : RMII_MDC_Pin RMII_RXD0_Pin RMII_RXD1_Pin */
   GPIO_InitStruct.Pin = RMII_MDC_Pin|RMII_RXD0_Pin|RMII_RXD1_Pin;
@@ -331,6 +342,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : LIM_X_Pin */
+  GPIO_InitStruct.Pin = LIM_X_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(LIM_X_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : LD1_Pin LD3_Pin LD2_Pin */
   GPIO_InitStruct.Pin = LD1_Pin|LD3_Pin|LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -338,19 +355,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PF12 PF13 PF14 */
-  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14;
+  /*Configure GPIO pins : PF12 DIR_X_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_12|DIR_X_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PE9 PE11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_11;
+  /*Configure GPIO pin : CLK_X_Pin */
+  GPIO_InitStruct.Pin = CLK_X_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+  HAL_GPIO_Init(CLK_X_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : RMII_TXD1_Pin */
   GPIO_InitStruct.Pin = RMII_TXD1_Pin;
@@ -373,6 +390,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USB_OverCurrent_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PC9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
   /*Configure GPIO pins : RMII_TX_EN_Pin RMII_TXD0_Pin */
   GPIO_InitStruct.Pin = RMII_TX_EN_Pin|RMII_TXD0_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
@@ -388,13 +411,342 @@ static void MX_GPIO_Init(void)
 //Creates a delay. Legnth is chosen by user through "us"
 void delay_us(int us)
 {
-		for(int i=0;i<us*5;i++)
-			  {
-				  asm volatile("nop");
+	for(int i=0;i<us*5;i++)
+	{
+		asm volatile("nop");
+	}
 
-			  }
+
+}
+
+//Head goes to zero
+void PnP_init(void)
+{
+	HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_SET); //Set X direction to left
+	while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)) //While limit switch open
+	{
+		  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
+
+		  delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+	}
+	pos_x = 0;
+	encoder_pos_x=0;
+}
+
+//Go to position pos based on motor steps, no verification via encoder
+void x_goto(int pos)
+{
+	int delta = pos - pos_x;
 
 
+
+	if(delta>0)
+	{
+		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_RESET); //Set X direction to right
+
+		if((delta+pos_x)>12698)		//Position is too far to the right
+		{
+			delta=0;
+		}
+	}
+	else
+	{
+		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_SET); //Set X direction to left
+		delta = -delta;
+
+		if(delta>pos_x)				//Position is too far to the left
+		{
+			delta=0;
+		}
+	}
+
+	int i=0;
+
+	while(i<=(delta*2))				//Creates steps for the motor
+		  {
+
+
+		  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
+
+		  i++;
+
+		  delay_us(500); //Choose the half-period in us of the signal. Lower = Faster motor
+
+		  }
+	if(delta!=0)
+	{
+	pos_x = pos;		//update x position
+	}
+}
+
+
+//Go to position pos_encoder_target based on encoder, verification via encoder
+void x_goto_2(int pos_encoder_target)
+{
+	int delta = pos_encoder_target - encoder_pos_x;
+
+
+
+		if(delta>0)
+		{
+			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_RESET); //Set X direction to right
+
+			if((delta+encoder_pos_x)>31745)
+			{
+				delta=0;
+			}
+
+			while(encoder_pos_x<pos_encoder_target)
+			{
+				HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
+
+				delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+
+			}
+		}
+		else
+		{
+			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_SET); //Set X direction to left
+			delta = -delta;
+
+			if(delta>encoder_pos_x)
+			{
+				delta=0;
+			}
+
+			while(encoder_pos_x>pos_encoder_target)
+			{
+				HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
+
+				delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+
+			}
+		}
+}
+
+
+//Test that makes the head go back and forth, user can choose the length via step_target, no verification via encoder
+void x_test(void)
+{
+	int i=0;			//Counts number of loop iterations
+	while(1)
+	{
+	int step=0;								//Counts iterations
+	int step_target=100;						//Number of steps done by the program (9524 = 30cm)
+
+	while(step<=(step_target*2))
+	{
+	 HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
+
+	 step++;
+
+	 delay_us(500); //Choose the half-period in us of the signal. Lower = Faster motor
+
+	 }
+
+	 delay_us(500000); //500ms delay
+
+	 i++;
+	 HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_13); //Change DIRECTION
+
+	 //encoder_pos_x = 0; //JUST FOR TESTING
+	}
+}
+
+
+//Test to ensure the limit switch works, LED flashes faster when switch is closed
+void switch_test(void)
+{
+	while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)) //While limit switch open
+		{
+			  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//BLUE LED ON/OFF
+
+			  delay_us(1000000); //1s delay
+		}
+
+	while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)==0) //While limit switch closed
+			{
+				  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//BLUE LED ON/OFF
+
+				  delay_us(500000); //500ms delay
+			}
+}
+
+
+//Test to make the head go to various positions, no verification via encoder
+void x_test_pos(void)
+{
+	delay_us(2000000); //2s
+	x_goto(6000);	//go to position 6000
+	delay_us(2000000); //2s
+	x_goto(9000);
+	delay_us(2000000); //2s
+	x_goto(3000);
+}
+
+
+
+//Sets chosen bits of a 32bit register using value
+void reg_set(unsigned long int reg, unsigned long int value)
+{
+        *(volatile unsigned long int *)reg = ( *(volatile unsigned long int *)reg | value );
+}
+
+//Overwrite a 32bit register with given value
+void reg_wr(u32 reg, u32 value)
+{
+        *(volatile u32 *)reg = value;
+}
+
+//Returns a 32bit register from provided address
+u32 reg_rd(u32 reg)
+{
+        return ( *(volatile u32 *)reg );
+}
+
+//Creates a 6 seconds delay and flashes the LED
+void startup_delay(void)
+{
+	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN OFF BLUE LED
+
+	HAL_Delay(3000);							//3s delay
+	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN ON BLUE LED
+
+	HAL_Delay(3000);
+}
+
+//User button interruption
+void EXTI15_10_IRQHandler(void)
+{
+	reg_wr(EXTI_BASE + 0x14, (1 << 13));			//Clear pending register
+
+	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN ON BLUE LED
+
+	global_go=1;
+
+}
+
+//Interruptions from pins 9 to 5
+void EXTI9_5_IRQHandler(void)
+{
+	u32 val;
+	val = reg_rd(EXTI_BASE + 0x14);		//Checks which interruption is called
+
+	reg_wr(EXTI_BASE + 0x14, val & 0x03E0); 	// CLear pending register from 9 to 5
+
+	if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)==0)	// X limit switch closed
+	encoder_pos_x=0;
+
+	if (val & (1 << 8))		//EXTI8
+	{
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8))					//Rising edge on A
+		{
+			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9))				//B is HIGH
+			{
+				encoder_pos_x++;
+			}
+			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9)==0)		//B is LOW
+
+			{
+				encoder_pos_x--;
+			}
+		}
+		else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8)==0)			//Falling edge on A
+		{
+			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9))				//B is HIGH
+			{
+				encoder_pos_x--;
+			}
+			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9)==0)		//B is LOW
+
+			{
+				encoder_pos_x++;
+			}
+		}
+	}
+
+	if (val & (1 << 9))		//EXTI9
+	{
+		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9))					//Rising edge on B
+		{
+			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8))				//A is HIGH
+			{
+				encoder_pos_x--;
+			}
+			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8)==0)		//A is LOW
+				{
+				encoder_pos_x++;
+			}
+		}
+		else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9)==0)			//Falling edge on B
+		{
+			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8))				//A is HIGH
+			{
+				encoder_pos_x++;
+			}
+			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8)==0)		//A is LOW
+			{
+				encoder_pos_x--;
+			}
+		}
+	}
+
+}
+
+//Setup interruption for the user button
+void Setup_user_button_led(void)
+{
+	unsigned long int val;
+	*(volatile unsigned long int *)(0xE000E100 + 0x4) = (1 <<  8); //Activate EXTI15_10 into NVIC
+	/* Configure External interrupt 13 to use PC13 */
+	val = *(volatile unsigned long int *)(SYSCFG_BASE + 0x14);
+	val &= 0xFF0F;    /* Clear EXTI13 */
+	val |= (2 << 4); /* EXTI13 is now PC13 */
+	*(volatile unsigned long int *)((unsigned long)SYSCFG_BASE + 0x14) = val;
+	/* Trigger configuration */
+	reg_set(EXTI_BASE + 0x08, (1 << 13)); /* Rising  trigger */
+
+	reg_set(EXTI_BASE + 0x0C, (1 << 13)); /* Falling trigger */
+
+	/* Activate EXTI13 (IMR) */
+	reg_set(EXTI_BASE + 0x00, 1 << 13);
+}
+
+//Setup interruption from the A signal
+void Setup_A_interupt(void)
+{
+	unsigned long int val;
+	*(volatile unsigned long int *)(0xE000E100) = (1 <<  23); //Activate EXTI9_5 into NVIC
+	/* Configure External interrupt 8 to use PC8 */
+	val = *(volatile unsigned long int *)(SYSCFG_BASE + 0x10);
+	val &= 0xFFF0;    /* Clear EXTI8 */
+	val |= (2 << 0); /* EXTI13 is now PC8 */
+	*(volatile unsigned long int *)((unsigned long)SYSCFG_BASE + 0x10) = val;
+	/* Trigger configuration */
+	reg_set(EXTI_BASE + 0x08, (1 << 8)); /* Rising  trigger */
+
+	reg_set(EXTI_BASE + 0x0C, (1 << 8)); /* Falling trigger */
+	/* Activate EXTI8 (IMR) */
+	reg_set(EXTI_BASE + 0x00, 1 << 8);
+}
+
+//Setup interruption for the B signal
+void Setup_B_interupt(void)
+{
+	unsigned long int val;
+	*(volatile unsigned long int *)(0xE000E100) = (1 <<  23); //Activate EXTI9_5 into NVIC
+	/* Configure External interrupt 9 to use PC9 */
+	val = *(volatile unsigned long int *)(SYSCFG_BASE + 0x10);
+	val &= 0xFF0F;    /* Clear EXTI9 */
+	val |= (2 << 4); /* EXTI9 is now PC9 */
+	*(volatile unsigned long int *)((unsigned long)SYSCFG_BASE + 0x10) = val;
+	/* Trigger configuration */
+	reg_set(EXTI_BASE + 0x08, (1 << 9)); /* Rising  trigger */
+
+	reg_set(EXTI_BASE + 0x0C, (1 << 9)); /* Falling trigger */
+
+	/* Activate EXTI9 (IMR) */
+	reg_set(EXTI_BASE + 0x00, 1 << 9);
 }
 /* USER CODE END 4 */
 
