@@ -1,0 +1,4 @@
+(fp_lib_table
+  (lib (name PickAndPlace)(type KiCad)(uri ${KIPRJMOD}/PickAndPlace.pretty)(options "")(descr ""))
+  (lib (name carte-v3)(type KiCad)(uri /home/axel/Téléchargements/Cartes_v3/hardware/prj-kicad/cartes_v3.pretty)(options "")(descr ""))
+)

@@ -1,0 +1,113 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 6 7
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L PickAndPlace:Conn_01x05 J13
+U 1 1 60B209D9
+P 1350 1600
+AR Path="/60B1BA96/60B209D9" Ref="J13"  Part="1" 
+AR Path="/60D3CB1B/60B209D9" Ref="J?"  Part="1" 
+F 0 "J13" H 1268 1175 50  0000 C CNN
+F 1 "Conn_01x05" H 1268 1266 50  0000 C CNN
+F 2 "PickAndPlace:2_54____5pins" H 1350 1600 50  0001 C CNN
+F 3 "~" H 1350 1600 50  0001 C CNN
+	1    1350 1600
+	-1   0    0    1   
+$EndComp
+$Comp
+L PickAndPlace:GND #PWR0157
+U 1 1 60B21169
+P 1700 1900
+AR Path="/60B1BA96/60B21169" Ref="#PWR0157"  Part="1" 
+AR Path="/60D3CB1B/60B21169" Ref="#PWR?"  Part="1" 
+F 0 "#PWR0157" H 1700 1900 30  0001 C CNN
+F 1 "GND" H 1700 1830 30  0001 C CNN
+F 2 "" H 1700 1900 60  0000 C CNN
+F 3 "" H 1700 1900 60  0000 C CNN
+	1    1700 1900
+	1    0    0    -1  
+$EndComp
+Text GLabel 1650 1700 2    50   Input ~ 0
+RST
+Text GLabel 1650 1600 2    50   Input ~ 0
+SWCLK
+Text GLabel 1650 1500 2    50   BiDi ~ 0
+SWDIO
+$Comp
+L PickAndPlace:+3V3 #PWR0158
+U 1 1 60B21860
+P 1700 1300
+AR Path="/60B1BA96/60B21860" Ref="#PWR0158"  Part="1" 
+AR Path="/60D3CB1B/60B21860" Ref="#PWR?"  Part="1" 
+F 0 "#PWR0158" H 1700 1260 30  0001 C CNN
+F 1 "+3V3" H 1709 1438 30  0000 C CNN
+F 2 "" H 1700 1300 60  0000 C CNN
+F 3 "" H 1700 1300 60  0000 C CNN
+	1    1700 1300
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1550 1400 1700 1400
+Wire Wire Line
+	1700 1400 1700 1300
+Wire Wire Line
+	1550 1500 1650 1500
+Wire Wire Line
+	1550 1600 1650 1600
+Wire Wire Line
+	1550 1700 1650 1700
+Wire Wire Line
+	1550 1800 1700 1800
+Wire Wire Line
+	1700 1800 1700 1900
+$Comp
+L PickAndPlace:Conn_01x03 J14
+U 1 1 60B4DD8B
+P 1350 2500
+AR Path="/60B1BA96/60B4DD8B" Ref="J14"  Part="1" 
+AR Path="/60D3CB1B/60B4DD8B" Ref="J?"  Part="1" 
+F 0 "J14" H 1268 2175 50  0000 C CNN
+F 1 "Conn_01x03" H 1268 2266 50  0000 C CNN
+F 2 "PickAndPlace:2_54___3pins" H 1350 2500 50  0001 C CNN
+F 3 "~" H 1350 2500 50  0001 C CNN
+	1    1350 2500
+	-1   0    0    1   
+$EndComp
+$Comp
+L PickAndPlace:GND #PWR0159
+U 1 1 60B4EA70
+P 1700 2700
+AR Path="/60B1BA96/60B4EA70" Ref="#PWR0159"  Part="1" 
+AR Path="/60D3CB1B/60B4EA70" Ref="#PWR?"  Part="1" 
+F 0 "#PWR0159" H 1700 2700 30  0001 C CNN
+F 1 "GND" H 1700 2630 30  0001 C CNN
+F 2 "" H 1700 2700 60  0000 C CNN
+F 3 "" H 1700 2700 60  0000 C CNN
+	1    1700 2700
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1550 2600 1700 2600
+Wire Wire Line
+	1700 2600 1700 2700
+Text GLabel 1700 2500 2    50   Input ~ 0
+TX
+Text GLabel 1700 2400 2    50   Output ~ 0
+RX
+Wire Wire Line
+	1700 2400 1550 2400
+Wire Wire Line
+	1550 2500 1700 2500
+$EndSCHEMATC

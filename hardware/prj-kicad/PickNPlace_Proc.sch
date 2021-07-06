@@ -1,0 +1,421 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 7
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L PickAndPlace:Conn_01x04 J4
+U 1 1 60A3F66E
+P 1750 4600
+F 0 "J4" H 1830 4592 50  0000 L CNN
+F 1 "Conn_01x04" H 1830 4501 50  0000 L CNN
+F 2 "PickAndPlace:3_96__4pins" H 1750 4600 50  0001 C CNN
+F 3 "~" H 1750 4600 50  0001 C CNN
+F 4 "Alim 24/7/5" H 1850 4400 50  0000 L CNN "Desc"
+	1    1750 4600
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:Conn_01x06 J3
+U 1 1 60A3FB60
+P 1100 6850
+F 0 "J3" H 1180 6842 50  0000 L CNN
+F 1 "Conn_01x06" H 1180 6751 50  0000 L CNN
+F 2 "PickAndPlace:B6P-VH_LF__SN_" H 1100 6850 50  0001 C CNN
+F 3 "~" H 1100 6850 50  0001 C CNN
+F 4 "" H 1100 6850 50  0001 C CNN "Desc"
+	1    1100 6850
+	-1   0    0    1   
+$EndComp
+$Comp
+L PickAndPlace:Conn_01x06 J5
+U 1 1 60A40072
+P 2650 5900
+F 0 "J5" H 2730 5937 50  0000 L CNN
+F 1 "Conn_01x06" H 2730 5846 50  0000 L CNN
+F 2 "PickAndPlace:B6P-VH_LF__SN_" H 2650 5900 50  0001 C CNN
+F 3 "~" H 2650 5900 50  0001 C CNN
+F 4 "Alim/Pompe/Ventilo" H 2730 5755 50  0000 L CNN "Desc"
+	1    2650 5900
+	-1   0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:Conn_01x02 J8
+U 1 1 60A4066E
+P 4550 7000
+F 0 "J8" H 4630 6992 50  0000 L CNN
+F 1 "Conn_01x02" H 4630 6901 50  0000 L CNN
+F 2 "PickAndPlace:2_54___2pins" H 4550 7000 50  0001 C CNN
+F 3 "~" H 4550 7000 50  0001 C CNN
+	1    4550 7000
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:Conn_01x02 J7
+U 1 1 60A40B07
+P 4550 6500
+F 0 "J7" H 4630 6537 50  0000 L CNN
+F 1 "Conn_01x02" H 4630 6446 50  0000 L CNN
+F 2 "PickAndPlace:2_54___2pins" H 4550 6500 50  0001 C CNN
+F 3 "~" H 4550 6500 50  0001 C CNN
+F 4 "Arrêt Urgence" H 4630 6355 50  0000 L CNN "Desc"
+	1    4550 6500
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:Conn_01x05 J10
+U 1 1 60A41DEC
+P 5650 6900
+F 0 "J10" H 5730 6987 50  0000 L CNN
+F 1 "Conn_01x05" H 5730 6896 50  0000 L CNN
+F 2 "PickAndPlace:2_50___5pins" H 5650 6900 50  0001 C CNN
+F 3 "~" H 5650 6900 50  0001 C CNN
+F 4 "RS422B" H 5730 6805 50  0000 L CNN "Desc"
+	1    5650 6900
+	1    0    0    -1  
+$EndComp
+$Sheet
+S 6200 1200 2300 1400
+U 60AC3327
+F0 "Power Supply" 98
+F1 "power.sch" 50
+$EndSheet
+NoConn ~ 2950 4700
+NoConn ~ 2950 4800
+$Comp
+L PickAndPlace:+VIn #PWR0101
+U 1 1 60A8D227
+P 2800 4450
+F 0 "#PWR0101" H 2800 4410 30  0001 C CNN
+F 1 "+VIn" H 2750 4600 30  0000 L CNN
+F 2 "" H 2800 4450 60  0000 C CNN
+F 3 "" H 2800 4450 60  0000 C CNN
+	1    2800 4450
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:GND #PWR0102
+U 1 1 60AA1DDC
+P 2800 4700
+F 0 "#PWR0102" H 2800 4700 30  0001 C CNN
+F 1 "GND" H 2800 4630 30  0001 C CNN
+F 2 "" H 2800 4700 60  0000 C CNN
+F 3 "" H 2800 4700 60  0000 C CNN
+	1    2800 4700
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:+VIn #PWR0103
+U 1 1 60AA742B
+P 1400 4450
+F 0 "#PWR0103" H 1400 4410 30  0001 C CNN
+F 1 "+VIn" H 1400 4600 30  0000 C CNN
+F 2 "" H 1400 4450 60  0000 C CNN
+F 3 "" H 1400 4450 60  0000 C CNN
+	1    1400 4450
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:GND #PWR0104
+U 1 1 60AABA60
+P 1400 4900
+F 0 "#PWR0104" H 1400 4900 30  0001 C CNN
+F 1 "GND" H 1400 4830 30  0001 C CNN
+F 2 "" H 1400 4900 60  0000 C CNN
+F 3 "" H 1400 4900 60  0000 C CNN
+	1    1400 4900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1400 4800 1400 4900
+Wire Wire Line
+	1550 4800 1400 4800
+$Comp
+L PickAndPlace:+7V #PWR0111
+U 1 1 60C28824
+P 1250 4450
+F 0 "#PWR0111" H 1250 4410 30  0001 C CNN
+F 1 "+7V" H 1250 4600 30  0000 C CNN
+F 2 "" H 1250 4450 60  0000 C CNN
+F 3 "" H 1250 4450 60  0000 C CNN
+	1    1250 4450
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:+5V #PWR0112
+U 1 1 60C2FD94
+P 1100 4450
+F 0 "#PWR0112" H 1100 4410 30  0001 C CNN
+F 1 "+5V" H 1100 4600 30  0000 C CNN
+F 2 "" H 1100 4450 60  0000 C CNN
+F 3 "" H 1100 4450 60  0000 C CNN
+	1    1100 4450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1400 4500 1400 4450
+Wire Wire Line
+	1400 4500 1550 4500
+Wire Wire Line
+	1550 4600 1250 4600
+Wire Wire Line
+	1250 4600 1250 4450
+Wire Wire Line
+	1550 4700 1100 4700
+Wire Wire Line
+	1100 4700 1100 4450
+$Comp
+L PickAndPlace:Conn_01x04 J2
+U 1 1 60A3F24E
+P 3150 4700
+F 0 "J2" H 3230 4737 50  0000 L CNN
+F 1 "Conn_01x04" H 3230 4646 50  0000 L CNN
+F 2 "PickAndPlace:3_96__4pins" H 3150 4700 50  0001 C CNN
+F 3 "~" H 3150 4700 50  0001 C CNN
+F 4 "Alim 24V" H 3230 4555 50  0000 L CNN "Desc"
+	1    3150 4700
+	1    0    0    1   
+$EndComp
+Wire Wire Line
+	2800 4500 2800 4450
+Wire Wire Line
+	2800 4500 2950 4500
+Wire Wire Line
+	2950 4600 2800 4600
+Wire Wire Line
+	2800 4600 2800 4700
+$Sheet
+S 3600 1200 2300 1400
+U 60C6EFF9
+F0 "Encodeurs" 98
+F1 "pick_and_place-encodeurs.sch" 50
+$EndSheet
+$Sheet
+S 1000 1200 2300 1400
+U 60AF3C79
+F0 "Processor" 98
+F1 "pick_and_place-processor.sch" 50
+$EndSheet
+$Sheet
+S 8850 1200 2250 1400
+U 60AAA78F
+F0 "Motors" 98
+F1 "pick_and_place-motors.sch" 50
+$EndSheet
+$Sheet
+S 8800 3150 2200 1200
+U 60B1BA96
+F0 "SWD and UART" 98
+F1 "pick_and_place-SWD-and-UART.sch" 50
+$EndSheet
+$Comp
+L PickAndPlace:Conn_01x06 J15
+U 1 1 60CBAEED
+P 1100 5850
+F 0 "J15" H 1018 5235 50  0000 C CNN
+F 1 "Conn_01x06" H 1018 5326 50  0000 C CNN
+F 2 "PickAndPlace:2_54____6pins" H 1100 5850 50  0001 C CNN
+F 3 "~" H 1100 5850 50  0001 C CNN
+F 4 "OTx" H 1018 5417 50  0000 C CNN "Desc"
+	1    1100 5850
+	-1   0    0    1   
+$EndComp
+$Comp
+L PickAndPlace:Conn_01x06 J16
+U 1 1 60CBB61D
+P 2650 6900
+F 0 "J16" H 2568 7407 50  0000 C CNN
+F 1 "Conn_01x06" H 2568 7316 50  0000 C CNN
+F 2 "PickAndPlace:2_54____6pins" H 2650 6900 50  0001 C CNN
+F 3 "~" H 2650 6900 50  0001 C CNN
+F 4 "Pump" H 2568 7225 50  0000 C CNN "Desc"
+	1    2650 6900
+	-1   0    0    -1  
+$EndComp
+Text GLabel 1450 6550 2    50   BiDi ~ 0
+OT1
+Text GLabel 1450 6650 2    50   BiDi ~ 0
+OT2
+Text GLabel 1450 6850 2    50   BiDi ~ 0
+OT4
+Text GLabel 1450 6750 2    50   BiDi ~ 0
+OT3
+Text GLabel 1450 6950 2    50   BiDi ~ 0
+OT5
+Text GLabel 1450 7050 2    50   BiDi ~ 0
+OT6
+Wire Wire Line
+	1300 6550 1450 6550
+Wire Wire Line
+	1300 6650 1450 6650
+Wire Wire Line
+	1300 6750 1450 6750
+Wire Wire Line
+	1300 6850 1450 6850
+Wire Wire Line
+	1300 6950 1450 6950
+Wire Wire Line
+	1300 7050 1450 7050
+Text GLabel 1450 5550 2    50   BiDi ~ 0
+OT1
+Text GLabel 1450 5650 2    50   BiDi ~ 0
+OT2
+Text GLabel 1450 5850 2    50   BiDi ~ 0
+OT4
+Text GLabel 1450 5750 2    50   BiDi ~ 0
+OT3
+Text GLabel 1450 5950 2    50   BiDi ~ 0
+OT5
+Text GLabel 1450 6050 2    50   BiDi ~ 0
+OT6
+Wire Wire Line
+	1300 5550 1450 5550
+Wire Wire Line
+	1300 5650 1450 5650
+Wire Wire Line
+	1300 5750 1450 5750
+Wire Wire Line
+	1300 5850 1450 5850
+Wire Wire Line
+	1300 5950 1450 5950
+Wire Wire Line
+	1300 6050 1450 6050
+Text GLabel 3000 5700 2    50   BiDi ~ 0
+PM2
+Text GLabel 3000 5800 2    50   BiDi ~ 0
+24V_1
+Text GLabel 3000 6000 2    50   BiDi ~ 0
+PM1
+Text GLabel 3000 5900 2    50   BiDi ~ 0
+24V_2
+Text GLabel 3000 6100 2    50   BiDi ~ 0
+24v3_1
+Text GLabel 3000 6200 2    50   BiDi ~ 0
+24v3_2
+Wire Wire Line
+	2850 5700 3000 5700
+Wire Wire Line
+	2850 5800 3000 5800
+Wire Wire Line
+	2850 5900 3000 5900
+Wire Wire Line
+	2850 6000 3000 6000
+Wire Wire Line
+	2850 6100 3000 6100
+Wire Wire Line
+	2850 6200 3000 6200
+Text GLabel 3000 6700 2    50   BiDi ~ 0
+PM2
+Text GLabel 3000 6800 2    50   BiDi ~ 0
+24V_1
+Text GLabel 3000 7000 2    50   BiDi ~ 0
+PM1
+Text GLabel 3000 6900 2    50   BiDi ~ 0
+24V_2
+Text GLabel 3000 7100 2    50   BiDi ~ 0
+24v3_1
+Text GLabel 3000 7200 2    50   BiDi ~ 0
+24v3_2
+Wire Wire Line
+	2850 6700 3000 6700
+Wire Wire Line
+	2850 6800 3000 6800
+Wire Wire Line
+	2850 6900 3000 6900
+Wire Wire Line
+	2850 7000 3000 7000
+Wire Wire Line
+	2850 7100 3000 7100
+Wire Wire Line
+	2850 7200 3000 7200
+$Comp
+L PickAndPlace:CONN_1 FIX1
+U 1 1 60D18902
+P 6550 5300
+F 0 "FIX1" H 6608 5300 40  0000 L CNN
+F 1 "CONN_1" H 6550 5355 30  0001 C CNN
+F 2 "PickAndPlace:FIX" H 6550 5300 60  0001 C CNN
+F 3 "" H 6550 5300 60  0000 C CNN
+	1    6550 5300
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:CONN_1 FIX2
+U 1 1 60D19914
+P 6550 5450
+F 0 "FIX2" H 6608 5450 40  0000 L CNN
+F 1 "CONN_1" H 6550 5505 30  0001 C CNN
+F 2 "PickAndPlace:FIX" H 6550 5450 60  0001 C CNN
+F 3 "" H 6550 5450 60  0000 C CNN
+	1    6550 5450
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:CONN_1 FIX3
+U 1 1 60D1B0B3
+P 6550 5600
+F 0 "FIX3" H 6608 5600 40  0000 L CNN
+F 1 "CONN_1" H 6550 5655 30  0001 C CNN
+F 2 "PickAndPlace:FIX" H 6550 5600 60  0001 C CNN
+F 3 "" H 6550 5600 60  0000 C CNN
+	1    6550 5600
+	1    0    0    -1  
+$EndComp
+$Comp
+L PickAndPlace:CONN_1 FIX4
+U 1 1 60D1B0B9
+P 6550 5750
+F 0 "FIX4" H 6608 5750 40  0000 L CNN
+F 1 "CONN_1" H 6550 5805 30  0001 C CNN
+F 2 "PickAndPlace:FIX" H 6550 5750 60  0001 C CNN
+F 3 "" H 6550 5750 60  0000 C CNN
+	1    6550 5750
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6400 5300 6300 5300
+Wire Wire Line
+	6300 5300 6300 5450
+Wire Wire Line
+	6400 5450 6300 5450
+Connection ~ 6300 5450
+Wire Wire Line
+	6300 5450 6300 5600
+Wire Wire Line
+	6400 5600 6300 5600
+Connection ~ 6300 5600
+Wire Wire Line
+	6300 5600 6300 5750
+Wire Wire Line
+	6400 5750 6300 5750
+Connection ~ 6300 5750
+$Comp
+L PickAndPlace:GND #PWR0189
+U 1 1 60D218EB
+P 6300 5900
+F 0 "#PWR0189" H 6300 5900 30  0001 C CNN
+F 1 "GND" H 6300 5830 30  0001 C CNN
+F 2 "" H 6300 5900 60  0000 C CNN
+F 3 "" H 6300 5900 60  0000 C CNN
+	1    6300 5900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6300 5750 6300 5900
+$Sheet
+S 6200 3150 2200 1200
+U 60D3CB1B
+F0 "Additional IO" 98
+F1 "pick_and_place-additional_IO.sch" 50
+$EndSheet
+$EndSCHEMATC

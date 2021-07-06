@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name PickAndPlace)(type Legacy)(uri ${KIPRJMOD}/PickAndPlace.lib)(options "")(descr ""))
+  (lib (name cartes_v3)(type Legacy)(uri /home/axel/Téléchargements/Cartes_v3/hardware/prj-kicad/cartes_v3.lib)(options "")(descr ""))
+)
