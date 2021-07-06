@@ -22,16 +22,20 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 typedef unsigned long u32;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define LINEMAX 200
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,25 +45,50 @@ typedef unsigned long u32;
 
 /* Private variables ---------------------------------------------------------*/
 
-UART_HandleTypeDef huart3;
-
-PCD_HandleTypeDef hpcd_USB_OTG_FS;
+UART_HandleTypeDef huart7;
 
 /* USER CODE BEGIN PV */
 
-static unsigned int pos_x;			//old X position without encoder
-static unsigned int encoder_pos_x;	//X position with encoder
-static unsigned int global_go=0;	//Used for test
-
+static unsigned int encoder_pos_x=0;	//X position with encoder
+static unsigned int encoder_pos_y=0;	//Y position with encoder
+static char buff[1] = "a";
+static char flag_crlf = 0;
+static int rx_index = 0;
+static char rx_buffer[LINEMAX];   // Local holding buffer to build line
+static unsigned int target_pos_x=0;
+static unsigned int target_pos_y=0;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART3_UART_Init(void);
-static void MX_USB_OTG_FS_PCD_Init(void);
+static void MX_UART7_Init(void);
 /* USER CODE BEGIN PFP */
+
+void delay_us(int us);
+void Setup_X_A_interupt(void);
+void Setup_X_B_interupt(void);
+void Setup_Y_A_interupt(void);
+void Setup_Y_B_interupt(void);
+void reg_set(unsigned long int reg, unsigned long int value);
+void reg_wr(u32 reg, u32 value);
+u32 reg_rd(u32 reg);
+void flag_crlf_handler(void);
+void UART_Write(char *str);
+void x_test(void);
+void PnP_init(void);
+void x_goto_2(int pos_encoder_target);
+void y_goto_2(int pos_encoder_target);
+void nozzle_down_1(void);
+void nozzle_down_2(void);
+void nozzle_up_1(void);
+void nozzle_up_2(void);
+void nozzle_reset(void);
+void amazing_square(void);
+
+
+
 
 /* USER CODE END PFP */
 
@@ -96,72 +125,43 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART3_UART_Init();
-  MX_USB_OTG_FS_PCD_Init();
+  MX_UART7_Init();
   /* USER CODE BEGIN 2 */
 
-  //HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_13);	//Set X direction to left
-
-  startup_delay();	//6 seconds delay with flashing LED
-
-
-
-
-
-
-
-
   /* Activate SYSCFG */
-    RCC->APB2ENR|= (1 << 14);
+  	RCC->APB2ENR |= (1 << 14);
 
-    Setup_user_button_led();
-    Setup_A_interupt();
-    Setup_B_interupt();
 
+  	Setup_X_A_interupt();
+  	Setup_X_B_interupt();
+  	Setup_Y_A_interupt();
+  	Setup_Y_B_interupt();
+
+
+	HAL_UART_Receive_IT(&huart7, (uint8_t*) buff, 1);
+
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); //Enable XYZ
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET); //Enable BCD
+
+
+	PnP_init();
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	while (1)
+	{
 
+		flag_crlf_handler();
 
-
-    PnP_init();			//Go to zero
-    delay_us(1000000); //1s delay
-    x_goto_2(9000);
-  while (1)
-  {
-
-
-
-	  /*
-	  *(volatile unsigned long *)0x40021418 = (1<<12);	//set PF12=1
-	  HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_12);
-	  delay_us(1000);
-	  *(volatile unsigned long *)0x40021418 = (1<<28);	//set PF12=0
-	  HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_12);
-	  */
-
-
-	  //x_test();
-
-	  //switch_test();
-
-	  //x_test_pos();
-
-
-	  if(global_go)			//Has User Button been pressed ?
-	  {
-		  x_goto_2(9000);
-		  global_go=0;
-	  }
 
 
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -175,9 +175,6 @@ void SystemClock_Config(void)
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
-  /** Configure LSE Drive Capability
-  */
-  HAL_PWR_EnableBkUpAccess();
   /** Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
@@ -185,14 +182,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 72;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 3;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -201,18 +194,17 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
     Error_Handler();
   }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART3|RCC_PERIPHCLK_CLK48;
-  PeriphClkInitStruct.Usart3ClockSelection = RCC_USART3CLKSOURCE_PCLK1;
-  PeriphClkInitStruct.Clk48ClockSelection = RCC_CLK48SOURCE_PLL;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_UART7;
+  PeriphClkInitStruct.Uart7ClockSelection = RCC_UART7CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -220,72 +212,37 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief USART3 Initialization Function
+  * @brief UART7 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART3_UART_Init(void)
+static void MX_UART7_Init(void)
 {
 
-  /* USER CODE BEGIN USART3_Init 0 */
+  /* USER CODE BEGIN UART7_Init 0 */
 
-  /* USER CODE END USART3_Init 0 */
+  /* USER CODE END UART7_Init 0 */
 
-  /* USER CODE BEGIN USART3_Init 1 */
+  /* USER CODE BEGIN UART7_Init 1 */
 
-  /* USER CODE END USART3_Init 1 */
-  huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
-  huart3.Init.WordLength = UART_WORDLENGTH_8B;
-  huart3.Init.StopBits = UART_STOPBITS_1;
-  huart3.Init.Parity = UART_PARITY_NONE;
-  huart3.Init.Mode = UART_MODE_TX_RX;
-  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart3.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart3) != HAL_OK)
+  /* USER CODE END UART7_Init 1 */
+  huart7.Instance = UART7;
+  huart7.Init.BaudRate = 115200;
+  huart7.Init.WordLength = UART_WORDLENGTH_8B;
+  huart7.Init.StopBits = UART_STOPBITS_1;
+  huart7.Init.Parity = UART_PARITY_NONE;
+  huart7.Init.Mode = UART_MODE_TX_RX;
+  huart7.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart7.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart7.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart7.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart7) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART3_Init 2 */
+  /* USER CODE BEGIN UART7_Init 2 */
 
-  /* USER CODE END USART3_Init 2 */
-
-}
-
-/**
-  * @brief USB_OTG_FS Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USB_OTG_FS_PCD_Init(void)
-{
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 0 */
-
-  /* USER CODE END USB_OTG_FS_Init 0 */
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 1 */
-
-  /* USER CODE END USB_OTG_FS_Init 1 */
-  hpcd_USB_OTG_FS.Instance = USB_OTG_FS;
-  hpcd_USB_OTG_FS.Init.dev_endpoints = 6;
-  hpcd_USB_OTG_FS.Init.speed = PCD_SPEED_FULL;
-  hpcd_USB_OTG_FS.Init.dma_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.phy_itface = PCD_PHY_EMBEDDED;
-  hpcd_USB_OTG_FS.Init.Sof_enable = ENABLE;
-  hpcd_USB_OTG_FS.Init.low_power_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.lpm_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.vbus_sensing_enable = ENABLE;
-  hpcd_USB_OTG_FS.Init.use_dedicated_ep1 = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_OTG_FS) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USB_OTG_FS_Init 2 */
-
-  /* USER CODE END USB_OTG_FS_Init 2 */
+  /* USER CODE END UART7_Init 2 */
 
 }
 
@@ -300,409 +257,138 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD3_Pin|LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, X_DIR_Pin|Y_DIR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_12|DIR_X_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, X_CLK_Pin|Y_CLK_Pin|XYZ_ENABLE_Pin|BCD_ENABLE_Pin
+                          |NOZZLE_CLK_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(CLK_X_GPIO_Port, CLK_X_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(NOZZLE_DIR_GPIO_Port, NOZZLE_DIR_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(USB_PowerSwitchOn_GPIO_Port, USB_PowerSwitchOn_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : LIM_Y_Pin */
-  GPIO_InitStruct.Pin = LIM_Y_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(LIM_Y_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : RMII_MDC_Pin RMII_RXD0_Pin RMII_RXD1_Pin */
-  GPIO_InitStruct.Pin = RMII_MDC_Pin|RMII_RXD0_Pin|RMII_RXD1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  /*Configure GPIO pins : X_DIR_Pin Y_DIR_Pin */
+  GPIO_InitStruct.Pin = X_DIR_Pin|Y_DIR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : RMII_REF_CLK_Pin RMII_MDIO_Pin RMII_CRS_DV_Pin */
-  GPIO_InitStruct.Pin = RMII_REF_CLK_Pin|RMII_MDIO_Pin|RMII_CRS_DV_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  /*Configure GPIO pins : X_CLK_Pin Y_CLK_Pin XYZ_ENABLE_Pin BCD_ENABLE_Pin
+                           NOZZLE_CLK_Pin */
+  GPIO_InitStruct.Pin = X_CLK_Pin|Y_CLK_Pin|XYZ_ENABLE_Pin|BCD_ENABLE_Pin
+                          |NOZZLE_CLK_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LIM_X_Pin */
-  GPIO_InitStruct.Pin = LIM_X_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(LIM_X_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : LD1_Pin LD3_Pin LD2_Pin */
-  GPIO_InitStruct.Pin = LD1_Pin|LD3_Pin|LD2_Pin;
+  /*Configure GPIO pin : NOZZLE_DIR_Pin */
+  GPIO_InitStruct.Pin = NOZZLE_DIR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(NOZZLE_DIR_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : X_A_Pin X_B_Pin */
+  GPIO_InitStruct.Pin = X_A_Pin|X_B_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Y_A_Pin Y_B_Pin */
+  GPIO_InitStruct.Pin = Y_A_Pin|Y_B_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PF12 DIR_X_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_12|DIR_X_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : CLK_X_Pin */
-  GPIO_InitStruct.Pin = CLK_X_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CLK_X_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : RMII_TXD1_Pin */
-  GPIO_InitStruct.Pin = RMII_TXD1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(RMII_TXD1_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : USB_PowerSwitchOn_Pin */
-  GPIO_InitStruct.Pin = USB_PowerSwitchOn_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(USB_PowerSwitchOn_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : USB_OverCurrent_Pin */
-  GPIO_InitStruct.Pin = USB_OverCurrent_Pin;
+  /*Configure GPIO pins : X_Lim_Pin Y_Lim_Pin */
+  GPIO_InitStruct.Pin = X_Lim_Pin|Y_Lim_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(USB_OverCurrent_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PC9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : RMII_TX_EN_Pin RMII_TXD0_Pin */
-  GPIO_InitStruct.Pin = RMII_TX_EN_Pin|RMII_TXD0_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
 }
 
 /* USER CODE BEGIN 4 */
-
 //Creates a delay. Legnth is chosen by user through "us"
 void delay_us(int us)
 {
-	for(int i=0;i<us*5;i++)
-	{
-		asm volatile("nop");
-	}
+		for(int i=0;i<us*5;i++)
+			  {
+				  asm volatile("nop");
+
+			  }
 
 
 }
 
-//Head goes to zero
-void PnP_init(void)
-{
-	HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_SET); //Set X direction to left
-	while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)) //While limit switch open
-	{
-		  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
-
-		  delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
-	}
-	pos_x = 0;
-	encoder_pos_x=0;
-}
-
-//Go to position pos based on motor steps, no verification via encoder
-void x_goto(int pos)
-{
-	int delta = pos - pos_x;
-
-
-
-	if(delta>0)
-	{
-		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_RESET); //Set X direction to right
-
-		if((delta+pos_x)>12698)		//Position is too far to the right
-		{
-			delta=0;
-		}
-	}
-	else
-	{
-		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_SET); //Set X direction to left
-		delta = -delta;
-
-		if(delta>pos_x)				//Position is too far to the left
-		{
-			delta=0;
-		}
-	}
-
-	int i=0;
-
-	while(i<=(delta*2))				//Creates steps for the motor
-		  {
-
-
-		  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
-
-		  i++;
-
-		  delay_us(500); //Choose the half-period in us of the signal. Lower = Faster motor
-
-		  }
-	if(delta!=0)
-	{
-	pos_x = pos;		//update x position
-	}
-}
-
-
-//Go to position pos_encoder_target based on encoder, verification via encoder
-void x_goto_2(int pos_encoder_target)
-{
-	int delta = pos_encoder_target - encoder_pos_x;
-
-
-
-		if(delta>0)
-		{
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_RESET); //Set X direction to right
-
-			if((delta+encoder_pos_x)>31745)
-			{
-				delta=0;
-			}
-
-			while(encoder_pos_x<pos_encoder_target)
-			{
-				HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
-
-				delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
-
-			}
-		}
-		else
-		{
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_SET); //Set X direction to left
-			delta = -delta;
-
-			if(delta>encoder_pos_x)
-			{
-				delta=0;
-			}
-
-			while(encoder_pos_x>pos_encoder_target)
-			{
-				HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
-
-				delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
-
-			}
-		}
-}
-
-
-//Test that makes the head go back and forth, user can choose the length via step_target, no verification via encoder
-void x_test(void)
-{
-	int i=0;			//Counts number of loop iterations
-	while(1)
-	{
-	int step=0;								//Counts iterations
-	int step_target=100;						//Number of steps done by the program (9524 = 30cm)
-
-	while(step<=(step_target*2))
-	{
-	 HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_9);	//Set PE9 to 1 or 0
-
-	 step++;
-
-	 delay_us(500); //Choose the half-period in us of the signal. Lower = Faster motor
-
-	 }
-
-	 delay_us(500000); //500ms delay
-
-	 i++;
-	 HAL_GPIO_TogglePin(GPIOF, GPIO_PIN_13); //Change DIRECTION
-
-	 //encoder_pos_x = 0; //JUST FOR TESTING
-	}
-}
-
-
-//Test to ensure the limit switch works, LED flashes faster when switch is closed
-void switch_test(void)
-{
-	while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)) //While limit switch open
-		{
-			  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//BLUE LED ON/OFF
-
-			  delay_us(1000000); //1s delay
-		}
-
-	while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)==0) //While limit switch closed
-			{
-				  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//BLUE LED ON/OFF
-
-				  delay_us(500000); //500ms delay
-			}
-}
-
-
-//Test to make the head go to various positions, no verification via encoder
-void x_test_pos(void)
-{
-	delay_us(2000000); //2s
-	x_goto(6000);	//go to position 6000
-	delay_us(2000000); //2s
-	x_goto(9000);
-	delay_us(2000000); //2s
-	x_goto(3000);
-}
-
-
-
-//Sets chosen bits of a 32bit register using value
-void reg_set(unsigned long int reg, unsigned long int value)
-{
-        *(volatile unsigned long int *)reg = ( *(volatile unsigned long int *)reg | value );
-}
-
-//Overwrite a 32bit register with given value
-void reg_wr(u32 reg, u32 value)
-{
-        *(volatile u32 *)reg = value;
-}
-
-//Returns a 32bit register from provided address
-u32 reg_rd(u32 reg)
-{
-        return ( *(volatile u32 *)reg );
-}
-
-//Creates a 6 seconds delay and flashes the LED
-void startup_delay(void)
-{
-	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN OFF BLUE LED
-
-	HAL_Delay(3000);							//3s delay
-	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN ON BLUE LED
-
-	HAL_Delay(3000);
-}
-
-//User button interruption
-void EXTI15_10_IRQHandler(void)
-{
-	reg_wr(EXTI_BASE + 0x14, (1 << 13));			//Clear pending register
-
-	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);	//TURN ON BLUE LED
-
-	global_go=1;
-
-}
-
-//Interruptions from pins 9 to 5
-void EXTI9_5_IRQHandler(void)
-{
-	u32 val;
-	val = reg_rd(EXTI_BASE + 0x14);		//Checks which interruption is called
-
-	reg_wr(EXTI_BASE + 0x14, val & 0x03E0); 	// CLear pending register from 9 to 5
-
-	if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3)==0)	// X limit switch closed
-	encoder_pos_x=0;
-
-	if (val & (1 << 8))		//EXTI8
-	{
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8))					//Rising edge on A
-		{
-			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9))				//B is HIGH
-			{
-				encoder_pos_x++;
-			}
-			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9)==0)		//B is LOW
-
-			{
-				encoder_pos_x--;
-			}
-		}
-		else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8)==0)			//Falling edge on A
-		{
-			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9))				//B is HIGH
-			{
-				encoder_pos_x--;
-			}
-			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9)==0)		//B is LOW
-
-			{
-				encoder_pos_x++;
-			}
-		}
-	}
-
-	if (val & (1 << 9))		//EXTI9
-	{
-		if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9))					//Rising edge on B
-		{
-			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8))				//A is HIGH
-			{
-				encoder_pos_x--;
-			}
-			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8)==0)		//A is LOW
-				{
-				encoder_pos_x++;
-			}
-		}
-		else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_9)==0)			//Falling edge on B
-		{
-			if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8))				//A is HIGH
-			{
-				encoder_pos_x++;
-			}
-			else if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_8)==0)		//A is LOW
-			{
-				encoder_pos_x--;
-			}
-		}
-	}
-
-}
-
-//Setup interruption for the user button
-void Setup_user_button_led(void)
-{
+//Setup interruption from the X_A signal (PE14)
+void Setup_X_A_interupt(void) {
 	unsigned long int val;
-	*(volatile unsigned long int *)(0xE000E100 + 0x4) = (1 <<  8); //Activate EXTI15_10 into NVIC
-	/* Configure External interrupt 13 to use PC13 */
-	val = *(volatile unsigned long int *)(SYSCFG_BASE + 0x14);
-	val &= 0xFF0F;    /* Clear EXTI13 */
-	val |= (2 << 4); /* EXTI13 is now PC13 */
-	*(volatile unsigned long int *)((unsigned long)SYSCFG_BASE + 0x14) = val;
+	*(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+	/* Configure External interrupt 14 to use PE14 */
+	val = *(volatile unsigned long int*) (SYSCFG_BASE + 0x14);
+	val &= 0xF0FF; /* Clear EXTI14 */
+	val |= (4 << 8); /* EXTI14 is now PE14 */
+	*(volatile unsigned long int*) ((unsigned long) SYSCFG_BASE + 0x14) = val;
+	/* Trigger configuration */
+	reg_set(EXTI_BASE + 0x08, (1 << 14)); /* Rising  trigger */
+
+	reg_set(EXTI_BASE + 0x0C, (1 << 14)); /* Falling trigger */
+	/* Activate EXTI8 (IMR) */
+	reg_set(EXTI_BASE + 0x00, 1 << 14);
+}
+
+//Setup interruption for the X_B signal (PE15)
+void Setup_X_B_interupt(void) {
+	unsigned long int val;
+	*(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+	/* Configure External interrupt 15 to use PE15 */
+	val = *(volatile unsigned long int*) (SYSCFG_BASE + 0x14);
+	val &= 0x0FFF; /* Clear EXTI15 */
+	val |= (4 << 12); /* EXTI15 is now PE15 */
+	*(volatile unsigned long int*) ((unsigned long) SYSCFG_BASE + 0x14) = val;
+	/* Trigger configuration */
+	reg_set(EXTI_BASE + 0x08, (1 << 15)); /* Rising  trigger */
+
+	reg_set(EXTI_BASE + 0x0C, (1 << 15)); /* Falling trigger */
+
+	/* Activate EXTI9 (IMR) */
+	reg_set(EXTI_BASE + 0x00, 1 << 15);
+}
+
+//Setup interruption from the Y_A signal (PB12)
+void Setup_Y_A_interupt(void) {
+	unsigned long int val;
+	*(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+	/* Configure External interrupt 12 to use PB12 */
+	val = *(volatile unsigned long int*) (SYSCFG_BASE + 0x14);
+	val &= 0xFFF0; /* Clear EXTI12 */
+	val |= (1 << 0); /* EXTI12 is now PB12 */
+	*(volatile unsigned long int*) ((unsigned long) SYSCFG_BASE + 0x14) = val;
+	/* Trigger configuration */
+	reg_set(EXTI_BASE + 0x08, (1 << 12)); /* Rising  trigger */
+
+	reg_set(EXTI_BASE + 0x0C, (1 << 12)); /* Falling trigger */
+	/* Activate EXTI12 (IMR) */
+	reg_set(EXTI_BASE + 0x00, 1 << 12);
+}
+
+//Setup interruption for the Y_B signal (PB13)
+void Setup_Y_B_interupt(void) {
+	unsigned long int val;
+	*(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+	/* Configure External interrupt 13 to use PB13 */
+	val = *(volatile unsigned long int*) (SYSCFG_BASE + 0x14);
+	val &= 0xFF0F; /* Clear EXTI13 */
+	val |= (1 << 4); /* EXTI13 is now PB13 */
+	*(volatile unsigned long int*) ((unsigned long) SYSCFG_BASE + 0x14) = val;
 	/* Trigger configuration */
 	reg_set(EXTI_BASE + 0x08, (1 << 13)); /* Rising  trigger */
 
@@ -712,42 +398,551 @@ void Setup_user_button_led(void)
 	reg_set(EXTI_BASE + 0x00, 1 << 13);
 }
 
-//Setup interruption from the A signal
-void Setup_A_interupt(void)
-{
-	unsigned long int val;
-	*(volatile unsigned long int *)(0xE000E100) = (1 <<  23); //Activate EXTI9_5 into NVIC
-	/* Configure External interrupt 8 to use PC8 */
-	val = *(volatile unsigned long int *)(SYSCFG_BASE + 0x10);
-	val &= 0xFFF0;    /* Clear EXTI8 */
-	val |= (2 << 0); /* EXTI13 is now PC8 */
-	*(volatile unsigned long int *)((unsigned long)SYSCFG_BASE + 0x10) = val;
-	/* Trigger configuration */
-	reg_set(EXTI_BASE + 0x08, (1 << 8)); /* Rising  trigger */
+//Interruptions from pins 15 to 10
+void EXTI15_10_IRQHandler(void) {
+	u32 val;
+	val = reg_rd(EXTI_BASE + 0x14);		//Checks which interruption is called
 
-	reg_set(EXTI_BASE + 0x0C, (1 << 8)); /* Falling trigger */
-	/* Activate EXTI8 (IMR) */
-	reg_set(EXTI_BASE + 0x00, 1 << 8);
+	reg_wr(EXTI_BASE + 0x14, val & 0xFC00); // Clear pending register from 15 to 10
+
+	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_10) == 0)	// X limit switch closed
+	//if ( (GPIOC->IDR & (1 << 10)) == 0)
+		encoder_pos_x = 0;							//Reset X coordinate
+
+	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_11) == 0)	// Y limit switch closed
+	//if ( (GPIOC->IDR & (1 << 11)) == 0)
+		encoder_pos_y = 0;							//Reset Y coordinate
+
+	if (val & (1 << 14))		//EXTI14
+			{
+		if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14))			//Rising edge on X_A
+				{
+			if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15))				//X_B is HIGH
+					{
+				encoder_pos_x++;
+			} else if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15) == 0)	//X_B is LOW
+
+					{
+				encoder_pos_x--;
+			}
+		} else if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14) == 0)//Falling edge on X_A
+				{
+			if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15))				//X_B is HIGH
+					{
+				encoder_pos_x--;
+			} else if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15) == 0)	//X_B is LOW
+
+					{
+				encoder_pos_x++;
+			}
+		}
+	}
+
+
+	if (val & (1 << 15))		//EXTI15
+			{
+		if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15))			//Rising edge on X_B
+				{
+			if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14))				//X_A is HIGH
+					{
+				encoder_pos_x--;
+			} else if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14) == 0)	//X_A is LOW
+					{
+				encoder_pos_x++;
+			}
+		} else if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_15) == 0)//Falling edge on X_B
+				{
+			if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14))				//X_A is HIGH
+					{
+				encoder_pos_x++;
+			} else if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14) == 0)	//X_A is LOW
+					{
+				encoder_pos_x--;
+			}
+		}
+	}
+
+
+	if(val & (1 << 12))		//R or F on Y_A
+		{
+			if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12))		//Rising edge on Y_A
+			{
+				if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13))	//Y_B is HIGH
+					encoder_pos_y--;
+				else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13)==0)	//Y_B is LOW
+					encoder_pos_y++;
+			}
+			else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12)==0)
+			{
+				if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13))
+								encoder_pos_y++;
+				else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13)==0)
+								encoder_pos_y--;
+			}
+		}
+
+	if(val & (1 << 13))		//R or F on Y_B
+	{
+		if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13))		//Rising edge on Y_B
+		{
+			if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12))	//Y_A is HIGH
+				encoder_pos_y++;
+			else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12)==0)	//Y_A is LOW
+				encoder_pos_y--;
+		}
+		else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13)==0)
+		{
+			if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12))
+							encoder_pos_y--;
+			else if(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12)==0)
+							encoder_pos_y++;
+		}
+	}
 }
 
-//Setup interruption for the B signal
-void Setup_B_interupt(void)
-{
-	unsigned long int val;
-	*(volatile unsigned long int *)(0xE000E100) = (1 <<  23); //Activate EXTI9_5 into NVIC
-	/* Configure External interrupt 9 to use PC9 */
-	val = *(volatile unsigned long int *)(SYSCFG_BASE + 0x10);
-	val &= 0xFF0F;    /* Clear EXTI9 */
-	val |= (2 << 4); /* EXTI9 is now PC9 */
-	*(volatile unsigned long int *)((unsigned long)SYSCFG_BASE + 0x10) = val;
-	/* Trigger configuration */
-	reg_set(EXTI_BASE + 0x08, (1 << 9)); /* Rising  trigger */
-
-	reg_set(EXTI_BASE + 0x0C, (1 << 9)); /* Falling trigger */
-
-	/* Activate EXTI9 (IMR) */
-	reg_set(EXTI_BASE + 0x00, 1 << 9);
+//Sets chosen bits of a 32bit register using value
+void reg_set(unsigned long int reg, unsigned long int value) {
+	*(volatile unsigned long int*) reg = (*(volatile unsigned long int*) reg
+			| value);
 }
+
+//Overwrite a 32bit register with given value
+void reg_wr(u32 reg, u32 value) {
+	*(volatile u32*) reg = value;
+}
+
+//Returns a 32bit register from provided address
+u32 reg_rd(u32 reg) {
+	return (*(volatile u32*) reg);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+
+	if (buff[0] >= 0 && buff[0] <= 127) {
+		switch (buff[0]) {
+
+		case 8:
+			HAL_UART_Transmit_IT(&huart7, (uint8_t*) "\b \b", 3);
+			//HAL_UART_Transmit_IT(&huart7, (uint8_t *) space, 1);
+			//HAL_UART_Transmit_IT(&huart7, (uint8_t *) buff, 1);
+			if (rx_index > 0)
+				rx_index--;
+			break;
+
+		case 13:
+			//HAL_UART_Transmit_IT(&huart7, (uint8_t *) buff, 1);
+			HAL_UART_Transmit_IT(&huart7, (uint8_t*) "\r\n", 2);
+			flag_crlf = 1;
+			break;
+
+		default:
+			HAL_UART_Transmit_IT(&huart7, (uint8_t*) buff, 1);
+
+			break;
+
+		}
+
+	}
+
+	if (rx_index < LINEMAX && buff[0] != 8) {
+
+		rx_buffer[rx_index] = buff[0];
+		rx_index++;
+	}
+
+	HAL_UART_Receive_IT(&huart7, (uint8_t*) buff, 1);
+}
+
+void flag_crlf_handler(void) {
+	int strlength = 0;
+	if (flag_crlf) {
+
+		flag_crlf = 0;
+		strlength = rx_index;
+		rx_index = 0;
+		rx_buffer[strlength - 1] = '\0';
+
+
+		/*Commands with arguments*/
+		if (strchr(rx_buffer, ' ')) {
+
+			//UART_Write("SPAAAAAAAACE\r\n");
+			if (strncmp(rx_buffer, "move ", 5) == 0) {
+				char *args = &(rx_buffer[5]);
+				if(strncmp(args, "x:", 2) == 0)
+				{
+					//UART_Write("MOVE X OR X and Y DETECTED\r\n");
+					if (strchr(args, ' '))
+					{
+						char *args2 = strchr(args,' ');
+						int x_digits = strlen(args)-strlen(args2)-2;
+						int y_digits = strlen(args2)-3;
+
+						int x_decimal=0;
+						for(int i=0;i<x_digits;i++)
+						{
+							x_decimal += (args[2+i]-'0')*pow(10,x_digits-1-i);
+						}
+						target_pos_x=x_decimal;
+
+						int y_decimal=0;
+						for(int i=0;i<y_digits;i++)
+						{
+							y_decimal += (args2[3+i]-'0')*pow(10,y_digits-1-i);
+						}
+						target_pos_y=y_decimal;
+
+						UART_Write("MOVE X AND Y DETECTED\r\n");
+						x_goto_2(target_pos_x);
+						y_goto_2(target_pos_y);
+
+					}
+					else
+					{
+						int x_digits = strlen(rx_buffer)-7;
+						int x_decimal=0;
+						for(int i=0;i<x_digits;i++)
+						{
+							x_decimal += (args[2+i]-'0')*pow(10,x_digits-1-i);
+						}
+						target_pos_x=x_decimal;
+						UART_Write("MOVE ONLY X DETECTED\r\n");
+						x_goto_2(target_pos_x);
+					}
+				}
+				else if(strncmp(args, "y:", 2) == 0)
+				{
+					int y_digits = strlen(rx_buffer)-7;
+					int y_decimal=0;
+					for(int i=0;i<y_digits;i++)
+					{
+						y_decimal += (args[2+i]-'0')*pow(10,y_digits-1-i);
+					}
+					target_pos_y=y_decimal;
+					UART_Write("MOVE ONLY Y DETECTED\r\n");
+					y_goto_2(target_pos_y);
+				}
+				else
+				{
+					UART_Write("MOVE ERROR\r\n");
+				}
+			}
+			if (strncmp(rx_buffer, "nozzle ", 7) == 0)
+			{
+				char *args = &(rx_buffer[7]);
+				if(strncmp(args, "move ", 5) == 0)
+				{
+
+					UART_Write("NOZZLE MOVE DETECTED\r\n");
+					char *args2 = &(args[5]);
+					if(strncmp(args2, "1", 1) == 0)
+					{
+						if (strchr(args2, ' '))
+						{
+							char *args3 = &(args2[2]);
+							int z_digits = strlen(rx_buffer)-14;
+							int z_decimal=0;
+							for(int i=0;i<z_digits;i++)
+							{
+								z_decimal += (args3[i]-'0')*pow(10,z_digits-1-i);
+							}
+							UART_Write("MOVE NOZZLE 1 DETECTED\r\n");
+						}
+					}
+					else if(strncmp(args2, "2", 1) == 0)
+					{
+						if (strchr(args2, ' '))
+						{
+							char *args3 = &(args2[2]);
+							int z_digits = strlen(rx_buffer)-14;
+							int z_decimal=0;
+							for(int i=0;i<z_digits;i++)
+							{
+								z_decimal += (args3[i]-'0')*pow(10,z_digits-1-i);
+							}
+
+							UART_Write("MOVE NOZZLE 2 DETECTED\r\n");
+						}
+					}
+				}
+				else if(strncmp(args, "down ", 5) == 0)
+				{
+					char *args2 = &(args[5]);
+					if(strncmp(args2, "1", 1) == 0)
+					{
+						nozzle_down_1();
+					}
+					else if(strncmp(args2, "2", 1)==0)
+					{
+						nozzle_down_2();
+					}
+				}
+				else if(strncmp(args, "up ", 3) == 0)
+				{
+					char *args2 = &(args[3]);
+					if(strncmp(args2, "1", 1) == 0)
+					{
+						nozzle_up_1();
+					}
+					else if(strncmp(args2, "2", 1)==0)
+					{
+						nozzle_up_2();
+					}
+				}
+				else if(strncmp(args, "reset", 5) == 0)
+				{
+					nozzle_reset();
+				}
+				else if(strncmp(args, "rotate ", 7) == 0)
+				{
+					UART_Write("NOZZLE ROTATE DETECTED\r\n");
+
+					char *args2 = &(args[7]);
+					if(strncmp(args2, "1", 1) == 0)
+					{
+						if (strchr(args2, ' '))
+						{
+							char *args3 = &(args2[2]);
+							int z_digits = strlen(rx_buffer)-16;
+							int z_decimal=0;
+							for(int i=0;i<z_digits;i++)
+							{
+								z_decimal += (args3[i]-'0')*pow(10,z_digits-1-i);
+							}
+							UART_Write("ROTATE NOZZLE 1 DETECTED\r\n");
+						}
+					}
+					else if(strncmp(args2, "2", 1) == 0)
+					{
+						if (strchr(args2, ' '))
+						{
+							char *args3 = &(args2[2]);
+							int z_digits = strlen(rx_buffer)-16;
+							int z_decimal=0;
+							for(int i=0;i<z_digits;i++)
+							{
+								z_decimal += (args3[i]-'0')*pow(10,z_digits-1-i);
+							}
+							UART_Write("ROTATE NOZZLE 2 DETECTED\r\n");
+						}
+					}
+				}
+			}
+			UART_Write("DONE\r\n");
+		}
+
+		/*Commands without arguments*/
+		else {
+			if (strcmp(rx_buffer, "enable-xyz") == 0) {
+
+				UART_Write("WOW ENABLE\r\n");
+				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);	//XYZ ENABLE
+			}
+			else if (strcmp(rx_buffer, "disable-xyz") == 0) {
+
+				UART_Write("WOW DISABLE\r\n");
+				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);	//XYZ DISABLE
+			}
+			else if (strcmp(rx_buffer, "enable-bcd") == 0) {
+
+				UART_Write("WOW ENABLE\r\n");
+				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);	//BCD ENABLE
+			}
+			else if (strcmp(rx_buffer, "disable-bcd") == 0) {
+
+				UART_Write("WOW DISABLE\r\n");
+				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);	//BCD DISABLE
+			}
+			else if (strcmp(rx_buffer, "square") == 0) {
+				while(1)
+				amazing_square();
+			}
+
+		}
+		if(strcmp(rx_buffer, "\0") != 0)
+		{
+			UART_Write("\n");
+		}
+	}
+}
+
+void UART_Write(char *str)
+{
+	while ((HAL_UART_Transmit(&huart7, (uint8_t*) str, strlen(str), 0xFFFF)) != HAL_OK);
+}
+
+
+//Test that makes the head go back and forth, user can choose the length via step_target, no verification via encoder
+void x_test(void) {
+	int i = 0;			//Counts number of loop iterations
+	while (1) {
+		int step = 0;								//Counts iterations
+		int step_target = 5000;	//Number of steps done by the program (9524 = 30cm)
+
+		while (step <= (step_target * 2)) {
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0);	//Set PA0 to 1 or 0
+
+			step++;
+
+			delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+
+		}
+
+		delay_us(1000000); //500ms delay
+
+		i++;
+		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0); //Change DIRECTION
+
+		//encoder_pos_x = 0; //JUST FOR TESTING
+	}
+}
+
+//Head goes to zero
+void PnP_init(void) {
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET); //Set X direction to left
+	//int pinstatec10 = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_10);
+	while (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_10)) //While limit switch open
+	{
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0);	//X CLK
+
+		delay_us(100); //Choose the half-period in us of the signal. Lower = Faster motor
+	}
+	encoder_pos_x = 0;
+
+	delay_us(100000);
+
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET); //Set Y direction to down
+		while (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_11)) //While limit switch open
+		{
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);	//Y CLK
+
+			delay_us(100); //Choose the half-period in us of the signal. Lower = Faster motor
+		}
+		encoder_pos_y = 0;
+}
+
+//Go to X position pos_encoder_target based on encoder, verification via encoder
+void x_goto_2(int pos_encoder_target) {
+	int delta = pos_encoder_target - encoder_pos_x;
+
+	if (delta > 0) {
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_SET); //Set X direction to right
+
+		if ((delta + encoder_pos_x) > 31745) {
+			delta = 0;
+		}
+
+		while (encoder_pos_x < pos_encoder_target) {
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0);	//X CLK
+
+			delay_us(100); //Choose the half-period in us of the signal. Lower = Faster motor
+
+		}
+	} else {
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET); //Set X direction to left
+		delta = -delta;
+
+		if (delta > encoder_pos_x) {
+			delta = 0;
+		}
+
+		while (encoder_pos_x > pos_encoder_target) {
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_0);	//X CLK
+
+			delay_us(100); //Choose the half-period in us of the signal. Lower = Faster motor
+
+		}
+	}
+}
+
+//Go to Y position pos_encoder_target based on encoder, verification via encoder
+void y_goto_2(int pos_encoder_target) {
+	int delta = pos_encoder_target - encoder_pos_y;
+
+	if (delta > 0) {
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET); //Set Y direction to up
+
+		if ((delta + encoder_pos_y) > 31745) {
+			delta = 0;
+		}
+
+		while (encoder_pos_y < pos_encoder_target) {
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);	//Y CLK
+
+			delay_us(100); //Choose the half-period in us of the signal. Lower = Faster motor
+
+		}
+	} else {
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET); //Set Y direction to down
+		delta = -delta;
+
+		if (delta > encoder_pos_y) {
+			delta = 0;
+		}
+
+		while (encoder_pos_y > pos_encoder_target) {
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);	//Y CLK
+
+			delay_us(100); //Choose the half-period in us of the signal. Lower = Faster motor
+
+		}
+	}
+}
+
+void nozzle_down_1(void)
+{
+	HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_SET); //Left nozzle down
+	for (int i = 0; i < 250; i++) {
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);	//NOZZLE CLK
+
+		delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+
+	}
+}
+
+void nozzle_down_2(void)
+{
+	HAL_GPIO_WritePin(GPIOF, GPIO_PIN_13, GPIO_PIN_RESET); //Left nozzle down
+	for (int i = 0; i < 250; i++) {
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);	//NOZZLE CLK
+
+		delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+
+	}
+}
+
+void nozzle_up_1(void)
+{
+	nozzle_down_2();
+}
+
+void nozzle_up_2(void)
+{
+	nozzle_down_1();
+}
+
+void nozzle_reset(void)
+{
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); //Disable BCD
+
+	delay_us(100000);
+
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET); //Enable BCD
+}
+
+void amazing_square(void)
+{
+	x_goto_2(26000);
+	delay_us(100000);
+	y_goto_2(26000);
+	delay_us(100000);
+	x_goto_2(5000);
+	delay_us(100000);
+	y_goto_2(5000);
+	delay_us(100000);
+}
+
+
 /* USER CODE END 4 */
 
 /**
