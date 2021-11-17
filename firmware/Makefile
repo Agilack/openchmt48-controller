@@ -1,0 +1,82 @@
+##
+ # @file  Makefile
+ # @brief Script to compile sources and create flat binary using "make" program
+ # 
+ # @author Saint-Genest Gwenael <gwen@agilack.fr>
+ # @copyright Agilack (c) 2021
+ # 
+ # @page License
+ # This firmware is free software: you can redistribute it and/or modify it
+ # under the terms of the GNU Lesser General Public License version 3 as
+ # published by the Free Software Foundation. You should have received a
+ # copy of the GNU Lesser General Public License along with this program,
+ # see LICENSE.md file for more details.
+ # This program is distributed WITHOUT ANY WARRANTY.
+##
+TARGET = fw-pnp
+
+ASRC = stm32f746xx.s
+SRC  = main.c
+
+CROSS = arm-none-eabi-
+BUILDDIR = build/
+CC = $(CROSS)gcc
+OBJCOPY = $(CROSS)objcopy
+OBJDUMP = $(CROSS)objdump
+RM = rm
+AFLAGS = -mcpu=cortex-m7 -mthumb
+CFLAGS = -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+CFLAGS += -I. -Isrc
+CFLAGS += -ffunction-sections -fdata-sections
+CFLAGS += -nostdlib -Os -ffunction-sections
+CFLAGS += -Wall -Wimplicit -Wcast-align -Wpointer-arith -Wswitch
+CFLAGS += -Wredundant-decls -Wreturn-type -Wshadow -Wunused
+LDFLAGS = -Wl,-Map=$(TARGET).map,--cref,--gc-sections
+LDFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+LDFLAGS += -Tsrc/target.ld
+
+# Debug symbols
+CFLAGS += -g
+
+AOBJ = $(patsubst %.s,build/%.o,$(ASRC))
+COBJ = $(patsubst %.c,build/%.o,$(SRC))
+HTML_OBJ = $(patsubst %.html,build/%.o,$(HTML))
+ICO_OBJ  = $(patsubst %.ico,build/%.o,$(ICO))
+
+all: $(BUILDDIR) $(AOBJ) $(COBJ)
+	@echo "  [LD] $(TARGET)"
+	@$(CC) $(LDFLAGS) -o $(TARGET).elf $(AOBJ) $(COBJ)
+	@echo "  [OC] $(TARGET).bin"
+	@$(OBJCOPY) -O binary $(TARGET).elf $(TARGET).bin
+	@echo "  [OD] $(TARGET).dis"
+	@$(OBJDUMP) -D $(TARGET).elf > $(TARGET).dis
+
+clean:
+	@echo "  [RM] $(TARGET)"
+	@$(RM) -f $(TARGET).*
+	@echo "  [RM] $(BUILDDIR)*.o $(BUILDDIR)rtos/*.o"
+	@$(RM) -f $(AOBJ) $(COBJ) $(OS_OBJ)
+	@echo "  [RM] Temporary files"
+	@$(RM) -f *~ src/*~
+	@$(RM) -rf build
+
+$(BUILDDIR):
+	@echo "  [MKDIR] $@"
+	@mkdir build
+
+build/%.o: src/%.s
+	@echo "  [CC] $<"
+	@$(CC) $(AFLAGS) -c $< -o $@
+
+build/%.o: src/%.c
+	@echo "  [CC] $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+debug:
+	arm-none-eabi-gdb --command=scripts/gdb.cfg $(TARGET).elf
+
+load:
+	arm-none-eabi-gdb --command=scripts/gdb_load.cfg $(TARGET).elf
+
+openocd:
+	openocd -f scripts/openocd.cfg

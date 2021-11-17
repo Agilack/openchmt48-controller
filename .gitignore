@@ -1,4 +1,2 @@
-*.o
-*.d
-Debug/
-
+# Temporary editor files
+*~
