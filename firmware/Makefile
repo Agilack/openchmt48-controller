@@ -18,6 +18,9 @@ TARGET = fw-pnp
 ASRC = stm32f746xx.s
 SRC  = main.c
 
+SRC_RTOS =  heap_1.c list.c queue.c tasks.c timers.c
+SRC_RTOS += stm32f7_port.c
+
 CROSS = arm-none-eabi-
 BUILDDIR = build/
 CC = $(CROSS)gcc
@@ -42,10 +45,14 @@ AOBJ = $(patsubst %.s,build/%.o,$(ASRC))
 COBJ = $(patsubst %.c,build/%.o,$(SRC))
 HTML_OBJ = $(patsubst %.html,build/%.o,$(HTML))
 ICO_OBJ  = $(patsubst %.ico,build/%.o,$(ICO))
+CFLAGS += -Irtos -Irtos/include -Irtos/cmsis
+CFLAGS_OS = $(CFLAGS)
+OS_OBJ = $(patsubst %.c,build/rtos/%.o,$(SRC_RTOS))
 
-all: $(BUILDDIR) $(AOBJ) $(COBJ)
+
+all: $(BUILDDIR) $(AOBJ) $(COBJ) $(OS_OBJ)
 	@echo "  [LD] $(TARGET)"
-	@$(CC) $(LDFLAGS) -o $(TARGET).elf $(AOBJ) $(COBJ)
+	@$(CC) $(LDFLAGS) -o $(TARGET).elf $(AOBJ) $(COBJ) $(OS_OBJ)
 	@echo "  [OC] $(TARGET).bin"
 	@$(OBJCOPY) -O binary $(TARGET).elf $(TARGET).bin
 	@echo "  [OD] $(TARGET).dis"
@@ -58,11 +65,14 @@ clean:
 	@$(RM) -f $(AOBJ) $(COBJ) $(OS_OBJ)
 	@echo "  [RM] Temporary files"
 	@$(RM) -f *~ src/*~
+	@$(RM) -f rtos/*~ rtos/include/*~
 	@$(RM) -rf build
 
 $(BUILDDIR):
 	@echo "  [MKDIR] $@"
 	@mkdir build
+	@echo "  [MKDIR] $@/rtos"
+	@mkdir build/rtos
 
 build/%.o: src/%.s
 	@echo "  [CC] $<"
@@ -71,6 +81,10 @@ build/%.o: src/%.s
 build/%.o: src/%.c
 	@echo "  [CC] $<"
 	@$(CC) $(CFLAGS) -c $< -o $@
+
+build/rtos/%.o: rtos/%.c
+	@echo "  [CC] $<"
+	@$(CC) $(CFLAGS_OS) -c $< -o $@
 
 debug:
 	arm-none-eabi-gdb --command=scripts/gdb.cfg $(TARGET).elf
