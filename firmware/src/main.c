@@ -28,6 +28,7 @@
 void delay_us(int us);
 static void task_first_task(void *pvParameters);
 static void pwm_initilize(void);
+static void init_io(void);
 
 int main(void)
 {
@@ -38,12 +39,13 @@ int main(void)
     val = reg_rd((u32)RCC_AHB1ENR);
     val |= (1 << 0); /* GPIO-A */
     val |= (1 << 1); /* GPIO-B */
+    val |= (1 << 2); /* GPIO-C */
     val |= (1 << 6); /* GPIO-G */
     reg_wr((u32)RCC_AHB1ENR, val);
 
-    a_mode = reg_rd((u32)GPIOA_MODER);
-    a_mode |= (1 << 0);
-    reg_wr((u32)GPIOA_MODER, a_mode); 
+    //a_mode = reg_rd((u32)GPIOA_MODER);
+    //a_mode |= (1 << 0);
+    //reg_wr((u32)GPIOA_MODER, a_mode); 
 
     b_mode = reg_rd((u32)GPIOB_MODER);
     b_mode |= (1 << 14);
@@ -53,7 +55,6 @@ int main(void)
     g_mode |= (1 << 4);
     reg_wr((u32)GPIOG_MODER, g_mode);   
 
-    pwm_initilize();
 
 	while(1)
     {
@@ -86,24 +87,37 @@ static void task_first_task(void *pvParameters)
 {
     u32 val;
 
+    delay_us(1000000);
+
+    pwm_initilize();
+    init_io();
 
     while(1)
     {
-        val = reg_rd((u32)GPIOG_BSRR);
-        val |= (1 << 18);
-        reg_wr((u32)GPIOG_BSRR, val);
+        reg16_clr((u32)TIM2_CCER, (1 << 0));    //Disable PWM
 
-        delay_us(100000);
+        delay_us(2000000);
 
-        val = reg_rd((u32)GPIOG_BSRR);
-        val |= (1 << 2);
-        reg_wr((u32)GPIOG_BSRR, val);
+        reg_set((u32)GPIOC_BSRR, (1 << 0));     //X GO RIGHT - PC0 HIGH
 
-        //delay_us(100000);
-        for(int i=0;i<16000000;i++)
-        {
-            val++;
-        }
+        reg16_set((u32)TIM2_CCER, (1 << 0));    //Enable PWM
+
+
+        delay_us(1000000);
+        //for(int i=0;i<1600000;i++) //Wait 1 s
+        //{
+        //    val++;
+        //}
+
+        reg16_clr((u32)TIM2_CCER, (1 << 0));    //Disable PWM
+
+        delay_us(2000000);
+
+        reg_set((u32)GPIOC_BSRR, (1 << 16));     //X GO LEFT - PC0 LOW
+
+        reg16_set((u32)TIM2_CCER, (1 << 0));    //Enable PWM
+
+        delay_us(1000000);
     }
 }
 
@@ -155,6 +169,22 @@ static void pwm_initilize(void)
     reg16_set((u32)TIM2_CR1, (1 << 0)); //Start timer
 }
 
+static void init_io(void)
+{
+//XYZ_EN PA4
+    reg_clr((u32)GPIOA_MODER, 0x300);       //Clear bits 8 and 9
+    reg_set((u32)GPIOA_MODER, (1 << 8));    //Output mode
+
+    reg_set((u32)GPIOA_BSRR, (1 << 4));     //PA4 HIGH = ENABLE
+
+//X_DIR PC0
+    reg_clr((u32)GPIOC_MODER, 0x3);         //Clear bits 0 and 1
+    reg_set((u32)GPIOC_MODER, (1 << 0));    //Output mode
+
+    reg_set((u32)GPIOC_BSRR, (1 << 0));     //PC0 HIGH
+
+}
+
 /**
  * @brief Creates a delay, cycles are lost.
  *
@@ -162,10 +192,8 @@ static void pwm_initilize(void)
  */
 void delay_us(int us)
 {
-    for (int i = 0; i < us ; i++)
+    for (int i = 0; i < us*6 ; i++)
     {
-        asm volatile("nop");
-        asm volatile("nop");
         asm volatile("nop");
     }
 
