@@ -27,23 +27,40 @@
 
 void delay_us(int us);
 static void task_first_task(void *pvParameters);
+static void pwm_initilize(void);
 
 int main(void)
 {
     u32 val;
-    u32 b_mode;
+    u32 a_mode, b_mode, g_mode;
 
     /* Activate GPIO controller(s) */
     val = reg_rd((u32)RCC_AHB1ENR);
+    val |= (1 << 0); /* GPIO-A */
     val |= (1 << 1); /* GPIO-B */
+    val |= (1 << 6); /* GPIO-G */
     reg_wr((u32)RCC_AHB1ENR, val);
+
+    a_mode = reg_rd((u32)GPIOA_MODER);
+    a_mode |= (1 << 0);
+    reg_wr((u32)GPIOA_MODER, a_mode); 
 
     b_mode = reg_rd((u32)GPIOB_MODER);
     b_mode |= (1 << 14);
-    reg_wr((u32)GPIOB_MODER, b_mode);   
+    reg_wr((u32)GPIOB_MODER, b_mode); 
+
+    g_mode = reg_rd((u32)GPIOG_MODER);
+    g_mode |= (1 << 4);
+    reg_wr((u32)GPIOG_MODER, g_mode);   
+
+    pwm_initilize();
 
 	while(1)
     {
+        val = reg_rd((u32)GPIOG_BSRR);
+        val |= (1 << 2);
+        reg_wr((u32)GPIOG_BSRR, val);
+
         val = reg_rd((u32)GPIOB_BSRR);
         val |= (1 << 23);
         reg_wr((u32)GPIOB_BSRR, val);
@@ -68,20 +85,74 @@ int main(void)
 static void task_first_task(void *pvParameters)
 {
     u32 val;
+
+
     while(1)
     {
-        val = reg_rd((u32)GPIOB_BSRR);
-        val |= (1 << 23);
-        reg_wr((u32)GPIOB_BSRR, val);
+        val = reg_rd((u32)GPIOG_BSRR);
+        val |= (1 << 18);
+        reg_wr((u32)GPIOG_BSRR, val);
 
-        delay_us(500000);
+        delay_us(100000);
 
-        val = reg_rd((u32)GPIOB_BSRR);
-        val |= (1 << 7);
-        reg_wr((u32)GPIOB_BSRR, val);
+        val = reg_rd((u32)GPIOG_BSRR);
+        val |= (1 << 2);
+        reg_wr((u32)GPIOG_BSRR, val);
 
-        delay_us(500000);
+        //delay_us(100000);
+        for(int i=0;i<16000000;i++)
+        {
+            val++;
+        }
     }
+}
+
+static void pwm_initilize(void)
+{
+    u32 val;
+    u32 a_mode;
+
+     /* Activate GPIO controller(s) */
+    val = reg_rd((u32)RCC_AHB1ENR);
+    val |= (1 << 0); /* GPIO-A */
+    reg_wr((u32)RCC_AHB1ENR, val);
+
+    a_mode = reg_rd((u32)GPIOA_MODER);
+    a_mode |= (2 << 0);                 //PA0 alternate function mode
+    reg_wr((u32)GPIOA_MODER, a_mode); 
+
+    val = reg_rd((u32)GPIOA_AFRL);
+    val |= (1 << 0);                    //AF1 (TIM2_CH1) on PA0
+    reg_wr((u32)GPIOA_AFRL, val);
+
+    val = reg_rd((u32)RCC_APB1ENR);
+    val |= (1 << 0);                    //TIM2 enabled
+    reg_wr((u32)RCC_APB1ENR, val);
+
+    reg16_set((u32)TIM2_CR1, (1 << 7)); //Auto-reload preload enable
+
+    //reg16_set((u32)TIM2_PSC, 0);        //Prescaler = 0
+
+    reg_wr((u32)TIM2_ARR, 3200);     //Preload = 3200 (Period = 200us)
+
+    reg_wr((u32)TIM2_CCR1, 1600);    //Duty cycle 50 percent
+
+    //reg_set((u32)TIM2_CCMR1, (0 << 0)); //CC1 channel configured as output
+
+    //reg_set((u32)TIM2_CCER, (0 << 1));  //Set polarity to active high
+
+    reg_set((u32)TIM2_CCMR1, (6 << 4)); //Output Compare 1 mode set to PWM mode 1
+    //reg_set((u32)TIM2_CCMR1, (0 << 16)); 
+
+    reg_set((u32)TIM2_CCMR1, (1 << 3)); //Preload enable
+
+    reg16_set((u32)TIM2_CCER, (1 << 0));  //Enable CC1
+
+    reg16_set((u32)TIM2_EGR, (1 << 0)); //Update generation
+
+    ////reg_set((u32)TIM2_BDTR, (1 << 15)); //Main Output Enable
+
+    reg16_set((u32)TIM2_CR1, (1 << 0)); //Start timer
 }
 
 /**
@@ -142,6 +213,51 @@ void reg_set(u32 reg, u32 value)
 void reg_clr(u32 reg, u32 value)
 {
     *(volatile u32 *)reg = ( *(volatile u32 *)reg & ~value );
+}
+
+/**
+ * @brief Read the value of a 16bits memory mapped register
+ *
+ * @param  reg Address of the register to read
+ * @return u16 Value of the register
+ */
+u16 reg16_rd(u32 reg)
+{
+        return ( *(volatile u16 *)reg );
+}
+
+
+/**
+ * @brief Write a value to a 16bits memory mapped register
+ *
+ * @param reg Address of the register to write
+ * @param value Value to write into the register
+ */
+void reg16_wr(u32 reg, u16 value)
+{
+        *(volatile u16 *)reg = value;
+}
+
+/**
+ * @brief Modify a 16bits memory mapped register by clearing some bits
+ *
+ * @param reg Address of the register to write
+ * @param value Mask of the bits to clear
+ */
+void reg16_clr(u32 reg, u16 value)
+{
+        *(volatile u16 *)reg = ( *(volatile u16 *)reg & ~value );
+}
+
+/**
+ * @brief Modify a 16bits memory mapped register by setting some bits
+ *
+ * @param reg Address of the register to write
+ * @param value Value to write into the register
+ */
+void reg16_set(u32 reg, u16 value)
+{
+        *(volatile u16 *)reg = ( *(volatile u16 *)reg | value );
 }
 
 /**

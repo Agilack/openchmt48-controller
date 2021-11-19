@@ -96,6 +96,7 @@
 #define TIM2_CCR2   (TIM2 + 0x38)
 #define TIM2_CCR3   (TIM2 + 0x3C)
 #define TIM2_CCR4   (TIM2 + 0x40)
+#define TIM2_BDTR   (TIM2 + 0x44)
 
 #define TIM_CR1(x)   (x + 0x00)
 #define TIM_DIER(x)  (x + 0x0C)
@@ -140,6 +141,7 @@
 #define GPIOA_MODER (GPIOA + 0x000)
 #define GPIOA_AFRL  (GPIOA + 0x020)
 #define GPIOA_AFRH  (GPIOA + 0x024)
+#define GPIOA_BSRR  (GPIOA + 0x018)
 
 #define GPIOB_MODER (GPIOB + 0x000)
 #define GPIOB_ODR   (GPIOB + 0x014)
