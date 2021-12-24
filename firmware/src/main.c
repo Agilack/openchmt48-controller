@@ -27,8 +27,20 @@
 
 void delay_us(int us);
 static void task_first_task(void *pvParameters);
+static void task_console(void *pvParameters);
 static void pwm_initilize(void);
 static void init_io(void);
+static void set_pwm_period(int period);
+static void init_uart(void);
+static void uart_putc(char c);
+void uart_puts (char *s);
+int uart_getc(unsigned char *c);
+
+#define BUFFER_SIZE 1024
+static u8 buffer[BUFFER_SIZE];
+u8 rx_buffer[BUFFER_SIZE];
+static int buffer_r, buffer_w;
+static volatile int i_rx_buff, i_rx_buff2;
 
 int main(void)
 {
@@ -75,6 +87,8 @@ int main(void)
         delay_us(1000000);
 
         xTaskCreate(task_first_task, "My first Task", configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY+1), NULL);
+        xTaskCreate(task_console, "Console", configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY+1), NULL);
+
         
         /* Start the tasks and timer running. */
         vTaskStartScheduler();
@@ -91,6 +105,48 @@ static void task_first_task(void *pvParameters)
 
     pwm_initilize();
     init_io();
+
+    while(1)
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 1));     //Y GO UP - PC1 HIGH
+        set_pwm_period(400);
+        reg16_set((u32)TIM5_CCER, (1 << 4));    //Enable PWM
+
+        delay_us(2000000);
+
+        set_pwm_period(100);
+
+        delay_us(2000000);
+
+    }
+    
+    while(1)
+    {
+        reg16_clr((u32)TIM5_CCER, (1 << 4));    //Disable PWM
+
+        delay_us(2000000);
+
+        reg_set((u32)GPIOC_BSRR, (1 << 1));     //Y GO UP - PC1 HIGH
+
+        reg16_set((u32)TIM5_CCER, (1 << 4));    //Enable PWM
+
+
+        delay_us(1000000);
+        //for(int i=0;i<1600000;i++) //Wait 1 s
+        //{
+        //    val++;
+        //}
+
+        reg16_clr((u32)TIM5_CCER, (1 << 4));    //Disable PWM
+
+        delay_us(2000000);
+
+        reg_set((u32)GPIOC_BSRR, (1 << 17));     //Y GO DOWN - PC1 LOW
+
+        reg16_set((u32)TIM5_CCER, (1 << 4));    //Enable PWM
+
+        delay_us(1000000);
+    }
 
     while(1)
     {
@@ -121,6 +177,35 @@ static void task_first_task(void *pvParameters)
     }
 }
 
+static void task_console(void *pvParameters)
+{
+    init_uart();
+
+    unsigned char mychar=0;
+
+    while(1)
+    {
+        if(i_rx_buff != i_rx_buff2)
+        {
+            uart_putc(rx_buffer[i_rx_buff2]);
+            i_rx_buff2++;
+        }
+        
+        //    uart_putc(mychar);
+        uart_puts("ABC\r\n");
+        delay_us(1000000);
+    }
+
+    while(1)
+    {
+        //uart_putc('A');
+        //uart_puts("TEST\n\r");
+        delay_us(1000000);
+    }
+
+}
+
+
 static void pwm_initilize(void)
 {
     u32 val;
@@ -147,7 +232,7 @@ static void pwm_initilize(void)
 
     //reg16_set((u32)TIM2_PSC, 0);        //Prescaler = 0
 
-    reg_wr((u32)TIM2_ARR, 3200);     //Preload = 3200 (Period = 200us)
+    reg_wr((u32)TIM2_ARR, 3200);     //Preload = 3200 (Period = 400us)
 
     reg_wr((u32)TIM2_CCR1, 1600);    //Duty cycle 50 percent
 
@@ -166,7 +251,35 @@ static void pwm_initilize(void)
 
     ////reg_set((u32)TIM2_BDTR, (1 << 15)); //Main Output Enable
 
+    a_mode = reg_rd((u32)GPIOA_MODER);
+    a_mode |= (2 << 2);                 //PA1 alternate function mode
+    reg_wr((u32)GPIOA_MODER, a_mode); 
+
+    val = reg_rd((u32)GPIOA_AFRL);
+    val |= (2 << 4);                    //AF2 (TIM5_CH2) on PA1
+    reg_wr((u32)GPIOA_AFRL, val);
+
+    val = reg_rd((u32)RCC_APB1ENR);
+    val |= (1 << 3);                    //TIM5 enabled
+    reg_wr((u32)RCC_APB1ENR, val);
+
+    reg16_set((u32)TIM5_CR1, (1 << 7)); //Auto-reload preload enable
+
+    reg_wr((u32)TIM5_ARR, 3200);     //Preload = 3200 (Period = 400us)
+
+    reg_wr((u32)TIM5_CCR2, 1600);    //Duty cycle 50 percent
+
+    reg_set((u32)TIM5_CCMR1, (6 << 12)); //Output Compare 2 mode set to PWM mode 1
+
+    reg_set((u32)TIM5_CCMR1, (1 << 11)); //Preload enable
+   
+    reg16_set((u32)TIM5_CCER, (1 << 4));  //Enable CC2
+
+    reg16_set((u32)TIM5_EGR, (1 << 0)); //Update generation
+
     reg16_set((u32)TIM2_CR1, (1 << 0)); //Start timer
+
+    reg16_set((u32)TIM5_CR1, (1 << 0)); //Start timer
 }
 
 static void init_io(void)
@@ -183,6 +296,164 @@ static void init_io(void)
 
     reg_set((u32)GPIOC_BSRR, (1 << 0));     //PC0 HIGH
 
+//Y_DIR PC1
+    reg_clr((u32)GPIOC_MODER, 0x7);         //Clear bits 2 and 3
+    reg_set((u32)GPIOC_MODER, (1 << 2));    //Output mode
+
+    reg_set((u32)GPIOC_BSRR, (1 << 1));     //PC1 HIGH    
+}
+
+static void set_pwm_period(int period)  //Period in us, only Y
+{
+    reg_wr((u32)TIM5_ARR, period*16);     //Preload
+
+    reg_wr((u32)TIM5_CCR2, period*8);    //Duty cycle 50 percent
+}
+
+static void init_uart(void)
+{
+    u32 val;
+
+      /* Activate GPIO controller(s) */
+    val = reg_rd((u32)RCC_AHB1ENR);
+    val |= (1 << 4); /* GPIO-E */
+    reg_wr((u32)RCC_AHB1ENR, val);
+
+    val = reg_rd((u32)GPIOE_MODER);
+    val |= (2 << 14);                 //PE7 alternate function mode
+    reg_wr((u32)GPIOE_MODER, val); 
+
+    val = reg_rd((u32)GPIOE_MODER);
+    val |= (2 << 16);                 //PE8 alternate function mode
+    reg_wr((u32)GPIOE_MODER, val); 
+
+    val = reg_rd((u32)GPIOE_AFRL);
+    val |= (8 << 28);                    //AF8 (UART7_Rx) on PE7
+    reg_wr((u32)GPIOE_AFRL, val);
+
+    val = reg_rd((u32)GPIOE_AFRH);
+    val |= (8 << 0);                     //AF8 (UART7_Tx) on PE8
+    reg_wr((u32)GPIOE_AFRH, val);
+
+    val = reg_rd((u32)RCC_APB1ENR);     //UART7 Enable
+    val |= (1 << 30);
+    reg_wr((u32)RCC_APB1ENR, val);
+
+    reg_wr(UART_BRR, 139); /* 115200 @ 16MHz       */
+
+    reg_wr(UART_CR1,   0x0C); /* Set TE & RE bits     */
+    reg_wr(UART_CR1,   0x0D); /* Set USART Enable bit */
+
+    buffer_r = 0;
+    buffer_w = 0;
+
+    i_rx_buff = 0;
+    i_rx_buff2 = 0;
+
+    reg_wr(0xE000E108, (1 << 18)); /* USART7 NVIC */
+
+    reg_set(UART_CR1, (1 << 5));    //RXNE interupt enable
+}
+
+/**
+ * @brief Interrupt handler
+ *
+ * This function is called by CPU when an UART interrupt signal is
+ * triggered.
+ */
+void UART7_IRQHandler(void)
+{
+    u32 isr = reg_rd(UART_ISR);
+
+    if (isr & (1 << 7))
+    {
+        if (buffer_r != buffer_w)
+        {
+            reg_wr(UART_TDR, buffer[buffer_r]);
+            buffer_r++;
+            if (buffer_r > (BUFFER_SIZE-1))
+                buffer_r = 0;
+        }
+        else
+            reg_clr(UART_CR1, (1 << 7));
+    }
+    if(isr & (1 << 5))
+    {
+        rx_buffer[i_rx_buff]=reg_rd(UART_RDR);
+        i_rx_buff++;
+        if(i_rx_buff > (BUFFER_SIZE-1))
+            i_rx_buff = 0;
+    }
+    if(isr & (1 << 3))
+    {
+        reg_set(UART_ICR, (1 << 3));
+    }
+
+}
+
+static void uart_putc(char c)
+{
+    int next;
+    int use_isr;
+
+    /* Tests if UART interrupt is active into NVIC */
+    use_isr = (reg_rd(0xE000E108) & (1 << 18)) ? 1 : 0; /* USART7 */
+
+    /* If UART interrupt is active, put byte into TX buffer */
+    if (use_isr)
+    {
+        next = (buffer_w + 1);
+        if (next > (BUFFER_SIZE-1))
+            next = 0;
+        if (next == buffer_r)
+            return;
+        buffer[buffer_w] = c;
+        buffer_w = next;
+        reg_set(UART_CR1, (1 << 7));
+    }
+    /* UART interrupt is inactive, use synchronous write to uart */
+    else
+    {
+        while ((reg_rd(UART_ISR) & (1 << 7)) == 0)
+            ;
+        reg_wr(UART_TDR, c);
+    }
+}
+
+/**
+ * @brief Send a text string to UART
+ *
+ * @param s Pointer to the string to send
+ */
+void uart_puts (char *s)
+{
+    while (*s)
+    {
+        uart_putc(*s);
+        s++;
+    }
+}
+
+/**
+ * @brief Read one byte received on UART
+ *
+ * @param c Pointer to a byte variable where to store recived data
+ * @return True if a byte has been received, False if no data available
+ */
+int uart_getc(unsigned char *c)
+{
+    unsigned char rx;
+
+    if (reg_rd(UART_ISR) & (1 << 5))
+    {
+        /* Get the received byte from RX fifo */
+        rx = reg_rd(UART_RDR);
+        /* If a data pointer has been defined, copy received byte */
+        if (c)
+            *c = rx;
+        return(1);
+    }
+    return (0);
 }
 
 /**

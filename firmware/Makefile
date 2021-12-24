@@ -40,6 +40,7 @@ LDFLAGS += -Tsrc/target.ld
 
 # Debug symbols
 CFLAGS += -g
+LDFLAGS += -g
 
 AOBJ = $(patsubst %.s,build/%.o,$(ASRC))
 COBJ = $(patsubst %.c,build/%.o,$(SRC))

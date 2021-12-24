@@ -98,6 +98,20 @@
 #define TIM2_CCR4   (TIM2 + 0x40)
 #define TIM2_BDTR   (TIM2 + 0x44)
 
+#define TIM5_CR1    (TIM5 + 0x00)
+#define TIM5_DIER   (TIM5 + 0x0C)
+#define TIM5_EGR    (TIM5 + 0x14)
+#define TIM5_CCMR1  (TIM5 + 0x18)
+#define TIM5_CCMR2  (TIM5 + 0x1C)
+#define TIM5_CCER   (TIM5 + 0x20)
+#define TIM5_PSC    (TIM5 + 0x28)
+#define TIM5_ARR    (TIM5 + 0x2C)
+#define TIM5_CCR1   (TIM5 + 0x34)
+#define TIM5_CCR2   (TIM5 + 0x38)
+#define TIM5_CCR3   (TIM5 + 0x3C)
+#define TIM5_CCR4   (TIM5 + 0x40)
+#define TIM5_BDTR   (TIM5 + 0x44)
+
 #define TIM_CR1(x)   (x + 0x00)
 #define TIM_DIER(x)  (x + 0x0C)
 #define TIM_SR(x)    (x + 0x10)
@@ -194,6 +208,14 @@
 #define FLASH_CR      (FLASH + 0x10)
 #define FLASH_OPTCR   (FLASH + 0x14)
 #define FLASH_OPTCR1  (FLASH + 0x18)
+
+#define UART7  0x40007800
+#define UART_CR1 (UART7 + 0x00)
+#define UART_BRR (UART7 + 0x0C)
+#define UART_ISR (UART7 + 0x1C)
+#define UART_ICR (UART7 + 0x20)
+#define UART_RDR (UART7 + 0x24)
+#define UART_TDR (UART7 + 0x28)
 
 #define DMA __attribute__((section(".dma_buffer")))
 
