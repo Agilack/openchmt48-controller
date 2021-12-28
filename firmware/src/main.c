@@ -2,7 +2,8 @@
  * @file  main.c
  * @brief Main function of the firmware
  *
- * @author Saint-Genest Gwenael <gwen@agilack.fr>
+ * @authors Axel Paolillo <axel.paolillo@agilack.fr>
+ *          Saint-Genest Gwenael <gwen@agilack.fr>
  * @copyright Agilack (c) 2021
  *
  * @page License
@@ -20,27 +21,21 @@
  * @return integer Exit code (but should never returns)
  */
 
-#include "types.h"
 #include "hardware.h"
+#include "types.h"
 #include "rtos/include/FreeRTOS.h"
 #include "rtos/include/task.h"
+#include "time.h"
 
 void delay_us(int us);
+void delay_rtos(int ms);
 static void task_first_task(void *pvParameters);
-static void task_console(void *pvParameters);
+void task_console(void *pvParameters);
 static void pwm_initilize(void);
 static void init_io(void);
 static void set_pwm_period(int period);
-static void init_uart(void);
-static void uart_putc(char c);
-void uart_puts (char *s);
-int uart_getc(unsigned char *c);
 
-#define BUFFER_SIZE 1024
-static u8 buffer[BUFFER_SIZE];
-u8 rx_buffer[BUFFER_SIZE];
-static int buffer_r, buffer_w;
-static volatile int i_rx_buff, i_rx_buff2;
+
 
 int main(void)
 {
@@ -177,34 +172,6 @@ static void task_first_task(void *pvParameters)
     }
 }
 
-static void task_console(void *pvParameters)
-{
-    init_uart();
-
-    unsigned char mychar=0;
-
-    while(1)
-    {
-        if(i_rx_buff != i_rx_buff2)
-        {
-            uart_putc(rx_buffer[i_rx_buff2]);
-            i_rx_buff2++;
-        }
-        
-        //    uart_putc(mychar);
-        uart_puts("ABC\r\n");
-        delay_us(1000000);
-    }
-
-    while(1)
-    {
-        //uart_putc('A');
-        //uart_puts("TEST\n\r");
-        delay_us(1000000);
-    }
-
-}
-
 
 static void pwm_initilize(void)
 {
@@ -310,151 +277,7 @@ static void set_pwm_period(int period)  //Period in us, only Y
     reg_wr((u32)TIM5_CCR2, period*8);    //Duty cycle 50 percent
 }
 
-static void init_uart(void)
-{
-    u32 val;
 
-      /* Activate GPIO controller(s) */
-    val = reg_rd((u32)RCC_AHB1ENR);
-    val |= (1 << 4); /* GPIO-E */
-    reg_wr((u32)RCC_AHB1ENR, val);
-
-    val = reg_rd((u32)GPIOE_MODER);
-    val |= (2 << 14);                 //PE7 alternate function mode
-    reg_wr((u32)GPIOE_MODER, val); 
-
-    val = reg_rd((u32)GPIOE_MODER);
-    val |= (2 << 16);                 //PE8 alternate function mode
-    reg_wr((u32)GPIOE_MODER, val); 
-
-    val = reg_rd((u32)GPIOE_AFRL);
-    val |= (8 << 28);                    //AF8 (UART7_Rx) on PE7
-    reg_wr((u32)GPIOE_AFRL, val);
-
-    val = reg_rd((u32)GPIOE_AFRH);
-    val |= (8 << 0);                     //AF8 (UART7_Tx) on PE8
-    reg_wr((u32)GPIOE_AFRH, val);
-
-    val = reg_rd((u32)RCC_APB1ENR);     //UART7 Enable
-    val |= (1 << 30);
-    reg_wr((u32)RCC_APB1ENR, val);
-
-    reg_wr(UART_BRR, 139); /* 115200 @ 16MHz       */
-
-    reg_wr(UART_CR1,   0x0C); /* Set TE & RE bits     */
-    reg_wr(UART_CR1,   0x0D); /* Set USART Enable bit */
-
-    buffer_r = 0;
-    buffer_w = 0;
-
-    i_rx_buff = 0;
-    i_rx_buff2 = 0;
-
-    reg_wr(0xE000E108, (1 << 18)); /* USART7 NVIC */
-
-    reg_set(UART_CR1, (1 << 5));    //RXNE interupt enable
-}
-
-/**
- * @brief Interrupt handler
- *
- * This function is called by CPU when an UART interrupt signal is
- * triggered.
- */
-void UART7_IRQHandler(void)
-{
-    u32 isr = reg_rd(UART_ISR);
-
-    if (isr & (1 << 7))
-    {
-        if (buffer_r != buffer_w)
-        {
-            reg_wr(UART_TDR, buffer[buffer_r]);
-            buffer_r++;
-            if (buffer_r > (BUFFER_SIZE-1))
-                buffer_r = 0;
-        }
-        else
-            reg_clr(UART_CR1, (1 << 7));
-    }
-    if(isr & (1 << 5))
-    {
-        rx_buffer[i_rx_buff]=reg_rd(UART_RDR);
-        i_rx_buff++;
-        if(i_rx_buff > (BUFFER_SIZE-1))
-            i_rx_buff = 0;
-    }
-    if(isr & (1 << 3))
-    {
-        reg_set(UART_ICR, (1 << 3));
-    }
-
-}
-
-static void uart_putc(char c)
-{
-    int next;
-    int use_isr;
-
-    /* Tests if UART interrupt is active into NVIC */
-    use_isr = (reg_rd(0xE000E108) & (1 << 18)) ? 1 : 0; /* USART7 */
-
-    /* If UART interrupt is active, put byte into TX buffer */
-    if (use_isr)
-    {
-        next = (buffer_w + 1);
-        if (next > (BUFFER_SIZE-1))
-            next = 0;
-        if (next == buffer_r)
-            return;
-        buffer[buffer_w] = c;
-        buffer_w = next;
-        reg_set(UART_CR1, (1 << 7));
-    }
-    /* UART interrupt is inactive, use synchronous write to uart */
-    else
-    {
-        while ((reg_rd(UART_ISR) & (1 << 7)) == 0)
-            ;
-        reg_wr(UART_TDR, c);
-    }
-}
-
-/**
- * @brief Send a text string to UART
- *
- * @param s Pointer to the string to send
- */
-void uart_puts (char *s)
-{
-    while (*s)
-    {
-        uart_putc(*s);
-        s++;
-    }
-}
-
-/**
- * @brief Read one byte received on UART
- *
- * @param c Pointer to a byte variable where to store recived data
- * @return True if a byte has been received, False if no data available
- */
-int uart_getc(unsigned char *c)
-{
-    unsigned char rx;
-
-    if (reg_rd(UART_ISR) & (1 << 5))
-    {
-        /* Get the received byte from RX fifo */
-        rx = reg_rd(UART_RDR);
-        /* If a data pointer has been defined, copy received byte */
-        if (c)
-            *c = rx;
-        return(1);
-    }
-    return (0);
-}
 
 /**
  * @brief Creates a delay, cycles are lost.
@@ -471,92 +294,15 @@ void delay_us(int us)
 }
 
 /**
- * @brief Read the value of a 32bits memory mapped register
+ * @brief Creates a delay. Max precision is 10ms
  *
- * @param reg Address of the register to read
- * @return u32 Value of the register
+ * @param ms Length of delay.
  */
-u32 reg_rd(u32 reg)
+void delay_rtos(int ms)
 {
-    return ( *(volatile u32 *)reg );
-}
+    u32 time = time_now();
 
-/**
- * @brief Write a value to a 32bits memory mapped register
- *
- * @param reg Address of the register to write
- * @param value Value to write into the register
- */
-void reg_wr(u32 reg, u32 value)
-{
-    *(volatile u32 *)reg = value;
-}
-
-/**
- * @brief Modify a 32bits memory mapped register by setting some bits
- *
- * @param reg Address of the register to write
- * @param value Mask of the bits to set
- */
-void reg_set(u32 reg, u32 value)
-{
-    *(volatile u32 *)reg = ( *(volatile u32 *)reg | value );
-}
-
-/**
- * @brief Modify a 32bits memory mapped register by clearing some bits
- *
- * @param reg Address of the register to write
- * @param value Mask of the bits to clear
- */
-void reg_clr(u32 reg, u32 value)
-{
-    *(volatile u32 *)reg = ( *(volatile u32 *)reg & ~value );
-}
-
-/**
- * @brief Read the value of a 16bits memory mapped register
- *
- * @param  reg Address of the register to read
- * @return u16 Value of the register
- */
-u16 reg16_rd(u32 reg)
-{
-        return ( *(volatile u16 *)reg );
-}
-
-
-/**
- * @brief Write a value to a 16bits memory mapped register
- *
- * @param reg Address of the register to write
- * @param value Value to write into the register
- */
-void reg16_wr(u32 reg, u16 value)
-{
-        *(volatile u16 *)reg = value;
-}
-
-/**
- * @brief Modify a 16bits memory mapped register by clearing some bits
- *
- * @param reg Address of the register to write
- * @param value Mask of the bits to clear
- */
-void reg16_clr(u32 reg, u16 value)
-{
-        *(volatile u16 *)reg = ( *(volatile u16 *)reg & ~value );
-}
-
-/**
- * @brief Modify a 16bits memory mapped register by setting some bits
- *
- * @param reg Address of the register to write
- * @param value Value to write into the register
- */
-void reg16_set(u32 reg, u16 value)
-{
-        *(volatile u16 *)reg = ( *(volatile u16 *)reg | value );
+    while(time_since(time) < ms);
 }
 
 /**

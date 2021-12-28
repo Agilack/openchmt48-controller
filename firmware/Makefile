@@ -16,7 +16,7 @@
 TARGET = fw-pnp
 
 ASRC = stm32f746xx.s
-SRC  = main.c
+SRC  = main.c console.c hardware.c time.c
 
 SRC_RTOS =  heap_1.c list.c queue.c tasks.c timers.c
 SRC_RTOS += stm32f7_port.c
@@ -53,7 +53,7 @@ OS_OBJ = $(patsubst %.c,build/rtos/%.o,$(SRC_RTOS))
 
 all: $(BUILDDIR) $(AOBJ) $(COBJ) $(OS_OBJ)
 	@echo "  [LD] $(TARGET)"
-	@$(CC) $(LDFLAGS) -o $(TARGET).elf $(AOBJ) $(COBJ) $(OS_OBJ)
+	@$(CC) $(LDFLAGS) -o $(TARGET).elf $(AOBJ) $(COBJ) $(OS_OBJ) -lm
 	@echo "  [OC] $(TARGET).bin"
 	@$(OBJCOPY) -O binary $(TARGET).elf $(TARGET).bin
 	@echo "  [OD] $(TARGET).dis"
