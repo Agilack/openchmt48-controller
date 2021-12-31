@@ -34,6 +34,10 @@ void task_console(void *pvParameters);
 static void pwm_initilize(void);
 static void init_io(void);
 static void set_pwm_period(int period);
+void Setup_X_A_interupt(void);
+void Setup_X_B_interupt(void);
+void Setup_Y_A_interupt(void);
+void Setup_Y_B_interupt(void);
 
 
 
@@ -100,6 +104,10 @@ static void task_first_task(void *pvParameters)
 
     pwm_initilize();
     init_io();
+    Setup_X_A_interupt();
+    Setup_X_B_interupt();
+    Setup_Y_A_interupt();
+    Setup_Y_B_interupt();
 
     while(1)
     {
@@ -257,6 +265,12 @@ static void init_io(void)
 
     reg_set((u32)GPIOA_BSRR, (1 << 4));     //PA4 HIGH = ENABLE
 
+//BCD_EN PA5
+    reg_clr((u32)GPIOA_MODER, 0xC00);       //Clear bits 10 and 11
+    reg_set((u32)GPIOA_MODER, (1 << 10));    //Output mode
+
+    reg_set((u32)GPIOA_BSRR, (1 << 5));     //PA5 HIGH = ENABLE
+
 //X_DIR PC0
     reg_clr((u32)GPIOC_MODER, 0x3);         //Clear bits 0 and 1
     reg_set((u32)GPIOC_MODER, (1 << 0));    //Output mode
@@ -267,7 +281,184 @@ static void init_io(void)
     reg_clr((u32)GPIOC_MODER, 0x7);         //Clear bits 2 and 3
     reg_set((u32)GPIOC_MODER, (1 << 2));    //Output mode
 
-    reg_set((u32)GPIOC_BSRR, (1 << 1));     //PC1 HIGH    
+    reg_set((u32)GPIOC_BSRR, (1 << 1));     //PC1 HIGH
+
+//Nozzle_CLK PA6
+    reg_clr((u32)GPIOA_MODER, 0x3000);       //Clear bits 12 and 13
+    reg_set((u32)GPIOA_MODER, (1 << 12));     //Output mode
+
+    //reg_set((u32)GPIOA_BSRR, (1 << 6));     //PA6 HIGH = ENABLE
+
+//Rot-Noz_CLK PA7
+    reg_clr((u32)GPIOA_MODER, 0xC000);       //Clear bits 14 and 15
+    reg_set((u32)GPIOA_MODER, (1 << 14));     //Output mode
+
+    //reg_set((u32)GPIOA_BSRR, (1 << 7));     //PA7 HIGH = ENABLE
+
+//Nozzle_DIR PF13
+    reg_clr((u32)GPIOF_MODER, 0xC000000);     //Clear bits 26 and 27
+    reg_set((u32)GPIOF_MODER, (1 << 26));     //Output mode
+
+    reg_set((u32)GPIOF_BSRR, (1 << 13));     //PF13 HIGH = ENABLE
+
+//Rot-Noz2_DIR PF14
+    reg_clr((u32)GPIOF_MODER, 0x30000000);     //Clear bits 28 and 29
+    reg_set((u32)GPIOF_MODER, (1 << 28));     //Output mode
+
+    reg_set((u32)GPIOF_BSRR, (1 << 14));     //PF14 HIGH = ENABLE
+
+//Rot-Noz1_DIR PF15
+    reg_clr((u32)GPIOF_MODER, 0xC0000000);     //Clear bits 30 and 31
+    reg_set((u32)GPIOF_MODER, (1 << 30));     //Output mode
+
+    reg_set((u32)GPIOF_BSRR, (1 << 15));     //PF15 HIGH = ENABLE
+
+//X_A PE14
+    reg_clr((u32)GPIOE_MODER, 0x30000000);     //Clear bits 28 and 29
+    reg_set((u32)GPIOE_MODER, (0 << 28));      //Input mode
+
+//X_B PE15
+    reg_clr((u32)GPIOE_MODER, 0xC0000000);     //Clear bits 30 and 31
+    reg_set((u32)GPIOE_MODER, (0 << 30));      //Input mode
+
+//Y_A PB12
+    reg_clr((u32)GPIOB_MODER, 0x3000000);      //Clear bits 24 and 25
+    reg_set((u32)GPIOB_MODER, (0 << 24));      //Input mode
+
+//Y_B PB13
+    reg_clr((u32)GPIOB_MODER, 0xC000000);     //Clear bits 26 and 27
+    reg_set((u32)GPIOB_MODER, (0 << 26));      //Input mode
+}
+
+//Setup interruption from the X_A signal (PE14)
+void Setup_X_A_interupt(void)
+{
+    unsigned long int val;
+    *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+    /* Configure External interrupt 14 to use PE14 */
+    val = *(volatile unsigned long int*) (SYSCFG + 0x14);
+    val &= 0xF0FF; /* Clear EXTI14 */
+    val |= (4 << 8); /* EXTI14 is now PE14 */
+    *(volatile unsigned long int*) ((unsigned long) SYSCFG + 0x14) = val;
+    /* Trigger configuration */
+    reg_set(EXTI + 0x08, (1 << 14)); /* Rising  trigger */
+
+    reg_set(EXTI + 0x0C, (1 << 14)); /* Falling trigger */
+    /* Activate EXTI8 (IMR) */
+    reg_set(EXTI + 0x00, 1 << 14);
+}
+
+//Setup interruption for the X_B signal (PE15)
+void Setup_X_B_interupt(void)
+{
+    unsigned long int val;
+    *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+    /* Configure External interrupt 15 to use PE15 */
+    val = *(volatile unsigned long int*) (SYSCFG + 0x14);
+    val &= 0x0FFF; /* Clear EXTI15 */
+    val |= (4 << 12); /* EXTI15 is now PE15 */
+    *(volatile unsigned long int*) ((unsigned long) SYSCFG + 0x14) = val;
+    /* Trigger configuration */
+    reg_set(EXTI + 0x08, (1 << 15)); /* Rising  trigger */
+
+    reg_set(EXTI + 0x0C, (1 << 15)); /* Falling trigger */
+
+    /* Activate EXTI9 (IMR) */
+    reg_set(EXTI + 0x00, 1 << 15);
+}
+
+//Setup interruption from the Y_A signal (PB12)
+void Setup_Y_A_interupt(void)
+{
+    unsigned long int val;
+    *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+    /* Configure External interrupt 12 to use PB12 */
+    val = *(volatile unsigned long int*) (SYSCFG + 0x14);
+    val &= 0xFFF0; /* Clear EXTI12 */
+    val |= (1 << 0); /* EXTI12 is now PB12 */
+    *(volatile unsigned long int*) ((unsigned long) SYSCFG + 0x14) = val;
+    /* Trigger configuration */
+    reg_set(EXTI + 0x08, (1 << 12)); /* Rising  trigger */
+
+    reg_set(EXTI + 0x0C, (1 << 12)); /* Falling trigger */
+    /* Activate EXTI12 (IMR) */
+    reg_set(EXTI + 0x00, 1 << 12);
+}
+
+//Setup interruption for the Y_B signal (PB13)
+void Setup_Y_B_interupt(void)
+{
+    unsigned long int val;
+    *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
+    /* Configure External interrupt 13 to use PB13 */
+    val = *(volatile unsigned long int*) (SYSCFG + 0x14);
+    val &= 0xFF0F; /* Clear EXTI13 */
+    val |= (1 << 4); /* EXTI13 is now PB13 */
+    *(volatile unsigned long int*) ((unsigned long) SYSCFG + 0x14) = val;
+    /* Trigger configuration */
+    reg_set(EXTI + 0x08, (1 << 13)); /* Rising  trigger */
+
+    reg_set(EXTI + 0x0C, (1 << 13)); /* Falling trigger */
+
+    /* Activate EXTI13 (IMR) */
+    reg_set(EXTI + 0x00, 1 << 13);
+}
+
+//Interruptions from pins 15 to 10
+void EXTI15_10_IRQHandler(void)
+{
+    u32 val;
+    val = reg_rd(EXTI + 0x14);     //Checks which interruption is called
+    reg_wr(EXTI + 0x14, val & 0xFC00); // Clear pending register from 15 to 10
+
+    if (val & (1 << 12))        //EXTI12
+    {
+        if (reg_rd(GPIO_IDR(GPIOB)) & (1 << 12))           //Rising edge on Y_A
+        {
+            uart_puts("R on Y_A\r\n");
+        }
+        else if(reg_rd(!(GPIO_IDR(GPIOB) & (1 << 12))))
+        {
+            uart_puts("F on Y_A\r\n");
+        }
+    }
+
+    if (val & (1 << 13))        //EXTI13    Y_B
+    {
+        if (reg_rd(GPIO_IDR(GPIOB)) & (1 << 13))           //Rising edge on Y_B
+        {
+            uart_puts("R on Y_B\r\n");
+        }
+        else if(reg_rd(!(GPIO_IDR(GPIOB) & (1 << 13))))
+        {
+            uart_puts("F on Y_B\r\n");
+        }
+   
+    }
+
+    if (val & (1 << 14))        //EXTI14
+    {
+        if (reg_rd(GPIO_IDR(GPIOE)) & (1 << 14))           //Rising edge on X_A
+        {
+            uart_puts("R on X_A\r\n");
+        }
+        else if(reg_rd(!(GPIO_IDR(GPIOE) & (1 << 14))))
+        {
+            uart_puts("F on X_A\r\n");
+        }
+    }
+
+    if (val & (1 << 15))        //EXTI15
+    {
+        if (reg_rd(GPIO_IDR(GPIOE)) & (1 << 15))           //Rising edge on X_B
+        {
+            uart_puts("R on X_B\r\n");
+        }
+        else if(reg_rd(!(GPIO_IDR(GPIOE) & (1 << 15))))
+        {
+            uart_puts("F on X_B\r\n");
+        }
+    }
 }
 
 static void set_pwm_period(int period)  //Period in us, only Y

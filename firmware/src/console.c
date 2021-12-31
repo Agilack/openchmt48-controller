@@ -27,6 +27,8 @@ static void init_uart(void);
 static void uart_putc(char c);
 void uart_puts (char *s);
 int uart_getc(unsigned char *c);
+void nozzle_reset(void);
+void nozzle_down_1(void);
 
 #define BUFFER_SIZE 1024
 static u8 buffer[BUFFER_SIZE];
@@ -226,7 +228,7 @@ void task_console(void *pvParameters)
                         char *args2 = &(args[5]);
                         if(strncmp(args2, "1", 1) == 0)
                         {
-                            //nozzle_down_1();
+                            nozzle_down_1();
                         }
                         else if(strncmp(args2, "2", 1)==0)
                         {
@@ -247,7 +249,7 @@ void task_console(void *pvParameters)
                     }
                     else if(strncmp(args, "reset", 5) == 0)
                     {
-                        //nozzle_reset();
+                        nozzle_reset();
                     }
                     else if(strncmp(args, "rotate ", 7) == 0)
                     {
@@ -293,22 +295,22 @@ void task_console(void *pvParameters)
                 if (strcmp(cmd_buffer, "enable-xyz") == 0) 
                 {
                     uart_puts("WOW ENABLE\r\n");
-                //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); //XYZ ENABLE
+                    reg_set((u32)GPIOA_BSRR, (1 << 4));     //XYZ ENABLE
                 }
                 else if (strcmp(cmd_buffer, "disable-xyz") == 0) 
                 {
                     uart_puts("WOW DISABLE\r\n");
-                //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);   //XYZ DISABLE
+                    reg_set((u32)GPIOA_BSRR, (1 << 20));     //XYZ DISABLE
                 }
                 else if (strcmp(cmd_buffer, "enable-bcd") == 0) 
                 {
                     uart_puts("WOW ENABLE\r\n");
-                //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET); //BCD ENABLE
+                    reg_set((u32)GPIOA_BSRR, (1 << 5));     //BCD ENABLE
                 }
                 else if (strcmp(cmd_buffer, "disable-bcd") == 0) 
                 {
                     uart_puts("WOW DISABLE\r\n");
-                //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);   //BCD DISABLE
+                    reg_set((u32)GPIOA_BSRR, (1 << 21));     //BCD DISABLE
                 }
                 else if (strcmp(cmd_buffer, "square") == 0) 
                 {
@@ -412,6 +414,32 @@ void UART7_IRQHandler(void)
     }
 
 }
+
+
+void nozzle_down_1(void)
+{
+    reg_set((u32)GPIOF_BSRR, (1 << 13));     //Left nozzle
+
+    for (int i = 0; i < 125; i++) 
+    {
+        reg_set((u32)GPIOA_BSRR, (1 << 6));     //NOZZLE_CLK HIGH
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+        reg_set((u32)GPIOA_BSRR, (1 << 22));     //NOZZLE_CLK LOW
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+    }
+
+}
+
+void nozzle_reset(void)
+{
+    reg_set((u32)GPIOA_BSRR, (1 << 21));     //BCD DISABLE
+   
+    delay_rtos(100);    //100ms
+
+    reg_set((u32)GPIOA_BSRR, (1 << 5));     //BCD ENABLE
+}
+
+
 
 static void uart_putc(char c)
 {
