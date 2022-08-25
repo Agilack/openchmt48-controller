@@ -26,158 +26,103 @@
 #include "rtos/include/FreeRTOS.h"
 #include "rtos/include/task.h"
 #include "time.h"
+#include "pnp.h"
+#include "queue.h"
+#include "uart.h"
+
+static uint fsm_state;    /* Current state of the pnp FSM */
+static int cmd_id;
+volatile int pos_x, pos_y;
 
 void delay_us(int us);
 void delay_rtos(int ms);
-static void task_first_task(void *pvParameters);
+static void task_pnp(void *pvParameters);
 void task_console(void *pvParameters);
 static void pwm_initilize(void);
 static void init_io(void);
-static void set_pwm_period(int period);
+static void set_x_pwm_period(int period);
+static void set_y_pwm_period(int period);
 void Setup_X_A_interupt(void);
 void Setup_X_B_interupt(void);
 void Setup_Y_A_interupt(void);
 void Setup_Y_B_interupt(void);
+//void encoder_init(void);
+static void fsm_transition(uint state);
+void move_x(int pos_encoder_target);
+void move_y(int pos_encoder_target);
+void move_x_y(int pos_x_target, int pos_y_target);
+void pnp_init_zero(void);
+void test_hw_encoder(void);
 
-
+xQueueHandle cmd_queue;
 
 int main(void)
 {
-    u32 val;
-    u32 a_mode, b_mode, g_mode;
+    cmd_queue = xQueueCreate(10, sizeof(int));
 
-    /* Activate GPIO controller(s) */
-    val = reg_rd((u32)RCC_AHB1ENR);
-    val |= (1 << 0); /* GPIO-A */
-    val |= (1 << 1); /* GPIO-B */
-    val |= (1 << 2); /* GPIO-C */
-    val |= (1 << 6); /* GPIO-G */
-    reg_wr((u32)RCC_AHB1ENR, val);
+    xTaskCreate(task_console, "Console", configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY+1), NULL);
+    xTaskCreate(task_pnp, "PickNPlace", configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY+1), NULL);
 
-    //a_mode = reg_rd((u32)GPIOA_MODER);
-    //a_mode |= (1 << 0);
-    //reg_wr((u32)GPIOA_MODER, a_mode); 
+    
+    /* Start the tasks and timer running. */
+    vTaskStartScheduler();
 
-    b_mode = reg_rd((u32)GPIOB_MODER);
-    b_mode |= (1 << 14);
-    reg_wr((u32)GPIOB_MODER, b_mode); 
+    uart_puts(" * FAILED TO START SQUEDULER\r\n");
 
-    g_mode = reg_rd((u32)GPIOG_MODER);
-    g_mode |= (1 << 4);
-    reg_wr((u32)GPIOG_MODER, g_mode);   
-
-
-	while(1)
-    {
-        val = reg_rd((u32)GPIOG_BSRR);
-        val |= (1 << 2);
-        reg_wr((u32)GPIOG_BSRR, val);
-
-        val = reg_rd((u32)GPIOB_BSRR);
-        val |= (1 << 23);
-        reg_wr((u32)GPIOB_BSRR, val);
-
-        delay_us(1000000);
-
-        val = reg_rd((u32)GPIOB_BSRR);
-        val |= (1 << 7);
-        reg_wr((u32)GPIOB_BSRR, val);
-
-        delay_us(1000000);
-
-        xTaskCreate(task_first_task, "My first Task", configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY+1), NULL);
-        xTaskCreate(task_console, "Console", configMINIMAL_STACK_SIZE, NULL, (tskIDLE_PRIORITY+1), NULL);
-
-        
-        /* Start the tasks and timer running. */
-        vTaskStartScheduler();
-
-        while(1);           
-    }
+    while(1);
 }
 
-static void task_first_task(void *pvParameters)
+static void task_pnp(void *pvParameters)
 {
-    u32 val;
-
-    delay_us(1000000);
-
-    pwm_initilize();
+    uart_puts(" * Init task PNP\r\n");
     init_io();
+    pwm_initilize();
+    //encoder_init();
     Setup_X_A_interupt();
     Setup_X_B_interupt();
     Setup_Y_A_interupt();
     Setup_Y_B_interupt();
 
+    delay_rtos(3000);
+
+    pnp_init_zero();
+
+    fsm_state = IDLE;
+
+    uart_puts("[TASK_PNP] while 1\r\n");
     while(1)
     {
-        reg_set((u32)GPIOC_BSRR, (1 << 1));     //Y GO UP - PC1 HIGH
-        set_pwm_period(400);
-        reg16_set((u32)TIM5_CCER, (1 << 4));    //Enable PWM
+        switch(fsm_state)
+        {
+            case IDLE:
+                fsm_idle();
+                break;
+            case HEAD_MOVE:
+                fsm_head_move();
+                break;
+            case NOZZLE_MOVE:
+                break;
+            case AIR_PUMP:
+                break;
+            case HOOK:
+                break;
+        }
 
-        delay_us(2000000);
-
-        set_pwm_period(100);
-
-        delay_us(2000000);
-
+        //test_hw_encoder();
     }
-    
-    while(1)
+}
+
+void test_hw_encoder(void)
+{
+    delay_rtos(200);
+    if ((reg_rd(GPIO_IDR(GPIOA)) & (1 << 11)) == 0)
     {
-        reg16_clr((u32)TIM5_CCER, (1 << 4));    //Disable PWM
-
-        delay_us(2000000);
-
-        reg_set((u32)GPIOC_BSRR, (1 << 1));     //Y GO UP - PC1 HIGH
-
-        reg16_set((u32)TIM5_CCER, (1 << 4));    //Enable PWM
-
-
-        delay_us(1000000);
-        //for(int i=0;i<1600000;i++) //Wait 1 s
-        //{
-        //    val++;
-        //}
-
-        reg16_clr((u32)TIM5_CCER, (1 << 4));    //Disable PWM
-
-        delay_us(2000000);
-
-        reg_set((u32)GPIOC_BSRR, (1 << 17));     //Y GO DOWN - PC1 LOW
-
-        reg16_set((u32)TIM5_CCER, (1 << 4));    //Enable PWM
-
-        delay_us(1000000);
+        reg_clr((u32)TIM_CNT(TIM1), 0xFFFF);
+        uart_puts("Encoder value reset !\r\n");
     }
-
-    while(1)
-    {
-        reg16_clr((u32)TIM2_CCER, (1 << 0));    //Disable PWM
-
-        delay_us(2000000);
-
-        reg_set((u32)GPIOC_BSRR, (1 << 0));     //X GO RIGHT - PC0 HIGH
-
-        reg16_set((u32)TIM2_CCER, (1 << 0));    //Enable PWM
-
-
-        delay_us(1000000);
-        //for(int i=0;i<1600000;i++) //Wait 1 s
-        //{
-        //    val++;
-        //}
-
-        reg16_clr((u32)TIM2_CCER, (1 << 0));    //Disable PWM
-
-        delay_us(2000000);
-
-        reg_set((u32)GPIOC_BSRR, (1 << 16));     //X GO LEFT - PC0 LOW
-
-        reg16_set((u32)TIM2_CCER, (1 << 0));    //Enable PWM
-
-        delay_us(1000000);
-    }
+    uart_puts("Encoder value : ");
+    uart_putdec(reg_rd((u32)TIM_CNT(TIM1)));
+    uart_puts("\r\n");
 }
 
 
@@ -203,27 +148,17 @@ static void pwm_initilize(void)
     val |= (1 << 0);                    //TIM2 enabled
     reg_wr((u32)RCC_APB1ENR, val);
 
-    reg16_set((u32)TIM2_CR1, (1 << 7)); //Auto-reload preload enable
-
-    //reg16_set((u32)TIM2_PSC, 0);        //Prescaler = 0
-
-    reg_wr((u32)TIM2_ARR, 3200);     //Preload = 3200 (Period = 400us)
-
-    reg_wr((u32)TIM2_CCR1, 1600);    //Duty cycle 50 percent
-
-    //reg_set((u32)TIM2_CCMR1, (0 << 0)); //CC1 channel configured as output
-
-    //reg_set((u32)TIM2_CCER, (0 << 1));  //Set polarity to active high
-
-    reg_set((u32)TIM2_CCMR1, (6 << 4)); //Output Compare 1 mode set to PWM mode 1
+    reg16_set((u32)TIM2_CR1, (1 << 7));     //Auto-reload preload enable
+    //reg16_set((u32)TIM2_PSC, 0);          //Prescaler = 0
+    reg_wr((u32)TIM2_ARR, 3200);            //Preload = 3200 (Period = 400us)
+    reg_wr((u32)TIM2_CCR1, 1600);           //Duty cycle 50 percent
+    //reg_set((u32)TIM2_CCMR1, (0 << 0));   //CC1 channel configured as output
+    //reg_set((u32)TIM2_CCER, (0 << 1));    //Set polarity to active high
+    reg_set((u32)TIM2_CCMR1, (6 << 4));     //Output Compare 1 mode set to PWM mode 1
     //reg_set((u32)TIM2_CCMR1, (0 << 16)); 
-
-    reg_set((u32)TIM2_CCMR1, (1 << 3)); //Preload enable
-
-    reg16_set((u32)TIM2_CCER, (1 << 0));  //Enable CC1
-
-    reg16_set((u32)TIM2_EGR, (1 << 0)); //Update generation
-
+    reg_set((u32)TIM2_CCMR1, (1 << 3));     //Preload enable
+    //reg16_set((u32)TIM2_CCER, (1 << 0));  //Enable CC1
+    reg16_set((u32)TIM2_EGR, (1 << 0));     //Update generation
     ////reg_set((u32)TIM2_BDTR, (1 << 15)); //Main Output Enable
 
     a_mode = reg_rd((u32)GPIOA_MODER);
@@ -238,27 +173,32 @@ static void pwm_initilize(void)
     val |= (1 << 3);                    //TIM5 enabled
     reg_wr((u32)RCC_APB1ENR, val);
 
-    reg16_set((u32)TIM5_CR1, (1 << 7)); //Auto-reload preload enable
+    reg16_set((u32)TIM5_CR1, (1 << 7));     //Auto-reload preload enable
+    reg_wr((u32)TIM5_ARR, 3200);            //Preload = 3200 (Period = 400us)
+    reg_wr((u32)TIM5_CCR2, 1600);           //Duty cycle 50 percent
+    reg_set((u32)TIM5_CCMR1, (6 << 12));    //Output Compare 2 mode set to PWM mode 1
+    reg_set((u32)TIM5_CCMR1, (1 << 11));    //Preload enable
+    //reg16_set((u32)TIM5_CCER, (1 << 4));  //Enable CC2
 
-    reg_wr((u32)TIM5_ARR, 3200);     //Preload = 3200 (Period = 400us)
+    reg16_set((u32)TIM5_EGR, (1 << 0));     //Update generation
 
-    reg_wr((u32)TIM5_CCR2, 1600);    //Duty cycle 50 percent
-
-    reg_set((u32)TIM5_CCMR1, (6 << 12)); //Output Compare 2 mode set to PWM mode 1
-
-    reg_set((u32)TIM5_CCMR1, (1 << 11)); //Preload enable
-   
-    reg16_set((u32)TIM5_CCER, (1 << 4));  //Enable CC2
-
-    reg16_set((u32)TIM5_EGR, (1 << 0)); //Update generation
-
-    reg16_set((u32)TIM2_CR1, (1 << 0)); //Start timer
-
-    reg16_set((u32)TIM5_CR1, (1 << 0)); //Start timer
+    reg16_set((u32)TIM2_CR1, (1 << 0));     //Start timer 2
+    reg16_set((u32)TIM5_CR1, (1 << 0));     //Start timer 5
 }
 
 static void init_io(void)
 {
+    u32 val;
+
+    /* Activate GPIO controller(s) */
+    val = reg_rd((u32)RCC_AHB1ENR);
+    val |= (1 << 0); /* GPIO-A */
+    val |= (1 << 1); /* GPIO-B */
+    val |= (1 << 2); /* GPIO-C */
+    val |= (1 << 4); /* GPIO-E */
+    val |= (1 << 5); /* GPIO-F */
+    reg_wr((u32)RCC_AHB1ENR, val);
+
 //XYZ_EN PA4
     reg_clr((u32)GPIOA_MODER, 0x300);       //Clear bits 8 and 9
     reg_set((u32)GPIOA_MODER, (1 << 8));    //Output mode
@@ -278,7 +218,7 @@ static void init_io(void)
     reg_set((u32)GPIOC_BSRR, (1 << 0));     //PC0 HIGH
 
 //Y_DIR PC1
-    reg_clr((u32)GPIOC_MODER, 0x7);         //Clear bits 2 and 3
+    reg_clr((u32)GPIOC_MODER, 0xC);         //Clear bits 2 and 3
     reg_set((u32)GPIOC_MODER, (1 << 2));    //Output mode
 
     reg_set((u32)GPIOC_BSRR, (1 << 1));     //PC1 HIGH
@@ -289,11 +229,17 @@ static void init_io(void)
 
     //reg_set((u32)GPIOA_BSRR, (1 << 6));     //PA6 HIGH = ENABLE
 
-//Rot-Noz_CLK PA7
+//Rot-Noz1_CLK PA7
     reg_clr((u32)GPIOA_MODER, 0xC000);       //Clear bits 14 and 15
     reg_set((u32)GPIOA_MODER, (1 << 14));     //Output mode
 
     //reg_set((u32)GPIOA_BSRR, (1 << 7));     //PA7 HIGH = ENABLE
+
+//Rot-Noz2_CLK PB0
+    reg_clr((u32)GPIOB_MODER, 0x3);           //Clear bits 0 and 1
+    reg_set((u32)GPIOB_MODER, (1 << 0));      //Output mode
+
+    //reg_set((u32)GPIOB_BSRR, (1 << 0));     //PB0 HIGH = ENABLE
 
 //Nozzle_DIR PF13
     reg_clr((u32)GPIOF_MODER, 0xC000000);     //Clear bits 26 and 27
@@ -328,12 +274,28 @@ static void init_io(void)
 //Y_B PB13
     reg_clr((u32)GPIOB_MODER, 0xC000000);     //Clear bits 26 and 27
     reg_set((u32)GPIOB_MODER, (0 << 26));      //Input mode
+
+//X_lim PC10
+    reg_clr((u32)GPIOC_MODER, 0x300000);     //Clear bits 20 and 21
+    reg_set((u32)GPIOC_MODER, (0 << 20));      //Input mode
+
+//Y_lim PC11
+    reg_clr((u32)GPIOC_MODER, 0xC00000);     //Clear bits 22 and 23
+    reg_set((u32)GPIOC_MODER, (0 << 22));      //Input mode
+
+    val = reg_rd((u32)GPIO_PUPD(GPIOC));
+    val &= ~(0xF00000);                        //Clear bits 20 to 23
+    val |= 0x500000;                            //Pull up on PC10 and PC11
+    reg_wr((u32)GPIO_PUPD(GPIOC), val);
 }
 
 //Setup interruption from the X_A signal (PE14)
 void Setup_X_A_interupt(void)
 {
     unsigned long int val;
+
+    reg_set((u32)RCC_APB2ENR, (1 << 14));    //Enbale SYSCFG
+
     *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
     /* Configure External interrupt 14 to use PE14 */
     val = *(volatile unsigned long int*) (SYSCFG + 0x14);
@@ -352,6 +314,9 @@ void Setup_X_A_interupt(void)
 void Setup_X_B_interupt(void)
 {
     unsigned long int val;
+
+    reg_set((u32)RCC_APB2ENR, (1 << 14));    //Enbale SYSCFG
+
     *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
     /* Configure External interrupt 15 to use PE15 */
     val = *(volatile unsigned long int*) (SYSCFG + 0x14);
@@ -371,6 +336,9 @@ void Setup_X_B_interupt(void)
 void Setup_Y_A_interupt(void)
 {
     unsigned long int val;
+
+    reg_set((u32)RCC_APB2ENR, (1 << 14));    //Enbale SYSCFG
+
     *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
     /* Configure External interrupt 12 to use PB12 */
     val = *(volatile unsigned long int*) (SYSCFG + 0x14);
@@ -389,6 +357,9 @@ void Setup_Y_A_interupt(void)
 void Setup_Y_B_interupt(void)
 {
     unsigned long int val;
+
+    reg_set((u32)RCC_APB2ENR, (1 << 14));    //Enbale SYSCFG
+
     *(volatile unsigned long int*) (0xE000E100 + 0x4) = (1 << 8); //Activate EXTI15_10 into NVIC
     /* Configure External interrupt 13 to use PB13 */
     val = *(volatile unsigned long int*) (SYSCFG + 0x14);
@@ -411,57 +382,142 @@ void EXTI15_10_IRQHandler(void)
     val = reg_rd(EXTI + 0x14);     //Checks which interruption is called
     reg_wr(EXTI + 0x14, val & 0xFC00); // Clear pending register from 15 to 10
 
-    if (val & (1 << 12))        //EXTI12
+    if((reg_rd(GPIO_IDR(GPIOC)) & (1 << 10)) == 0)          //X limit switch reached
+        pos_x=0;
+
+    if((reg_rd(GPIO_IDR(GPIOC)) & (1 << 11)) == 0)          //Y limit switch reached
+        pos_y=0;
+
+    if (val & (1 << 12))        //EXTI12    Y_A
     {
-        if (reg_rd(GPIO_IDR(GPIOB)) & (1 << 12))           //Rising edge on Y_A
+        if (reg_rd(GPIO_IDR(GPIOB)) & (1 << 12))                //Rising edge on Y_A
         {
-            uart_puts("R on Y_A\r\n");
+            //uart_puts("R on Y_A\r\n");
+            if(reg_rd(GPIO_IDR(GPIOB)) & (1 << 13))             //Y_B HIGH
+                pos_y--;
+            else if(!(reg_rd(GPIO_IDR(GPIOB)) & (1 << 13)))     //Y_B LOW
+                pos_y++;
         }
-        else if(reg_rd(!(GPIO_IDR(GPIOB) & (1 << 12))))
+        else if(!(reg_rd(GPIO_IDR(GPIOB)) & (1 << 12)))         //Falling edge on Y_A
         {
-            uart_puts("F on Y_A\r\n");
+            //uart_puts("F on Y_A\r\n");
+            if(reg_rd(GPIO_IDR(GPIOB)) & (1 << 13))             //Y_B HIGH
+                pos_y++;
+            else if(!(reg_rd(GPIO_IDR(GPIOB)) & (1 << 13)))     //Y_B LOW
+                pos_y--;
         }
     }
 
     if (val & (1 << 13))        //EXTI13    Y_B
     {
-        if (reg_rd(GPIO_IDR(GPIOB)) & (1 << 13))           //Rising edge on Y_B
+        if (reg_rd(GPIO_IDR(GPIOB)) & (1 << 13))                //Rising edge on Y_B
         {
-            uart_puts("R on Y_B\r\n");
+            //uart_puts("R on Y_B\r\n");
+            if(reg_rd(GPIO_IDR(GPIOB)) & (1 << 12))             //Y_A HIGH
+                pos_y++;
+            else if(!(reg_rd(GPIO_IDR(GPIOB)) & (1 << 12)))     //Y_A LOW
+                pos_y--;
         }
-        else if(reg_rd(!(GPIO_IDR(GPIOB) & (1 << 13))))
+        else if(!(reg_rd(GPIO_IDR(GPIOB)) & (1 << 13)))         //Falling edge on Y_B
         {
-            uart_puts("F on Y_B\r\n");
+            //uart_puts("F on Y_B\r\n");
+            if(reg_rd(GPIO_IDR(GPIOB)) & (1 << 12))             //Y_A HIGH
+                pos_y--;
+            else if(!(reg_rd(GPIO_IDR(GPIOB)) & (1 << 12)))     //Y_A LOW
+                pos_y++;   
         }
    
     }
 
-    if (val & (1 << 14))        //EXTI14
+    if (val & (1 << 14))        //EXTI14    X_A
     {
-        if (reg_rd(GPIO_IDR(GPIOE)) & (1 << 14))           //Rising edge on X_A
+        if (reg_rd(GPIO_IDR(GPIOE)) & (1 << 14))                //Rising edge on X_A
         {
-            uart_puts("R on X_A\r\n");
+            //uart_puts("R on X_A\r\n");
+            if(reg_rd(GPIO_IDR(GPIOE)) & (1 << 15))             //X_B HIGH
+                pos_x++;
+            else if(!(reg_rd(GPIO_IDR(GPIOE)) & (1 << 15)))     //X_B LOW
+                pos_x--;
         }
-        else if(reg_rd(!(GPIO_IDR(GPIOE) & (1 << 14))))
+        else if(!(reg_rd(GPIO_IDR(GPIOE)) & (1 << 14)))         //Falling edge on X_A
         {
-            uart_puts("F on X_A\r\n");
+            //uart_puts("F on X_A\r\n");
+            if(reg_rd(GPIO_IDR(GPIOE)) & (1 << 15))             //X_B HIGH
+                pos_x--;
+            else if(!(reg_rd(GPIO_IDR(GPIOE)) & (1 << 15)))     //X_B LOW
+                pos_x++;
         }
     }
 
-    if (val & (1 << 15))        //EXTI15
+    if (val & (1 << 15))        //EXTI15    X_B
     {
-        if (reg_rd(GPIO_IDR(GPIOE)) & (1 << 15))           //Rising edge on X_B
+        if (reg_rd(GPIO_IDR(GPIOE)) & (1 << 15))                //Rising edge on X_B
         {
-            uart_puts("R on X_B\r\n");
+            //uart_puts("R on X_B\r\n");
+            if(reg_rd(GPIO_IDR(GPIOE)) & (1 << 14))             //X_A HIGH
+                pos_x--;
+            else if(!(reg_rd(GPIO_IDR(GPIOE)) & (1 << 14)))     //X_A LOW
+                pos_x++;
         }
-        else if(reg_rd(!(GPIO_IDR(GPIOE) & (1 << 15))))
+        else if(!(reg_rd(GPIO_IDR(GPIOE)) & (1 << 15)))         //Falling edge on X_B
         {
-            uart_puts("F on X_B\r\n");
+            //uart_puts("F on X_B\r\n");
+            if(reg_rd(GPIO_IDR(GPIOE)) & (1 << 14))             //X_A HIGH
+                pos_x++;
+            else if(!(reg_rd(GPIO_IDR(GPIOE)) & (1 << 14)))     //X_A LOW
+                pos_x--;
         }
     }
 }
 
-static void set_pwm_period(int period)  //Period in us, only Y
+// void encoder_init(void)
+// {
+//     u32 val;
+
+//     reg_set((u32)RCC_APB2ENR, (1 << 14));    //Enbale SYSCFG
+//     reg_set((u32)RCC_APB2ENR, (1 << 0));     //TIM1 enable
+
+// //Add_IO8 PA8
+//     reg_clr((u32)GPIOA_MODER, 0x30000);       //Clear bits 16 and 17
+//     reg_set((u32)GPIOA_MODER, (2 << 16));    //AF mode
+
+//     val = reg_rd((u32)GPIOA_AFRH);
+//     val |= (1 << 0);                    //AF1 (TIM1_CH1) on PA8
+//     reg_wr((u32)GPIOA_AFRH, val);
+
+// //Add_IO9 PA9
+//     reg_clr((u32)GPIOA_MODER, 0xC0000);       //Clear bits 18 and 19
+//     reg_set((u32)GPIOA_MODER, (2 << 18));    //AF mode
+
+//     val = reg_rd((u32)GPIOA_AFRH);
+//     val |= (1 << 4);                    //AF1 (TIM1_CH2) on PA9
+//     reg_wr((u32)GPIOA_AFRH, val);
+
+//     val = reg_rd((u32)GPIO_PUPD(GPIOA));
+//     val &= ~(0xF0000);                        //Clear bits 16 to 19
+//     val |= 0x50000;                            //Pull down on PA8 and PA9
+//     reg_wr((u32)GPIO_PUPD(GPIOA), val);
+
+// //Ass_IO11 PA11    Encoder pusher button
+//     reg_clr((u32)GPIOA_MODER, 0xC00000);       //Clear bits 22 and 23
+//     reg_set((u32)GPIOA_MODER, (0 << 22));    //Input mode
+
+
+//     reg_set((u32)TIM1_CCMR1, (1 << 0));      //Channel 1 as TI1
+//     reg_set((u32)TIM1_CCMR1, (1 << 8));      //Channel 2 as TI2
+
+//     reg_set((u32)TIM1_SMCR, (3 << 0));        //Encoder mode 3
+//     reg_set((u32)TIM1_CR1, (1 << 0));        //Enable
+// }
+
+static void set_x_pwm_period(int period)  //Period in us, only x
+{
+    reg_wr((u32)TIM2_ARR, period*16);     //Preload
+
+    reg_wr((u32)TIM2_CCR1, period*8);    //Duty cycle 50 percent
+}
+
+static void set_y_pwm_period(int period)  //Period in us, only Y
 {
     reg_wr((u32)TIM5_ARR, period*16);     //Preload
 
@@ -494,6 +550,431 @@ void delay_rtos(int ms)
     u32 time = time_now();
 
     while(time_since(time) < ms);
+}
+
+void fsm_idle(void)
+{
+    cmd_id=0;
+    int val=0;
+
+    if(uxQueueMessagesWaiting(cmd_queue) > 0)
+    {
+        if(xQueueReceive(cmd_queue, &cmd_id, portMAX_DELAY) == pdPASS)
+        {
+            uart_puts("Element found\r\n");
+            if (cmd_id == 1 || cmd_id == 2 || cmd_id == 3)
+            {
+                fsm_transition(HEAD_MOVE);
+            }
+            else if(cmd_id == 4)
+            {
+                if(xQueueReceive(cmd_queue, &val, portMAX_DELAY) == pdPASS)
+                {
+                    uart_putdec(val);
+                }
+            }
+        }
+    }
+    //uart_puts("Element not found\r\n");
+}
+
+void fsm_head_move(void)
+{
+    int x_target=0;
+    int y_target=0;
+    int flag_x_target_received = 0;
+    int flag_y_target_received = 0;
+
+    switch(cmd_id)
+    {
+        case 1:
+            if(xQueueReceive(cmd_queue, &x_target, portMAX_DELAY) == pdPASS)
+            {
+                uart_puts("Command MOVE X to position ");
+                uart_putdec(x_target);
+                uart_puts(" received.\r\n\n");
+
+                set_x_pwm_period(2500);
+
+                move_x(x_target);
+
+                uart_puts("Target position reached.\r\n\n");
+
+                fsm_transition(IDLE);
+            }
+            break;
+        case 2:
+            if(xQueueReceive(cmd_queue, &y_target, portMAX_DELAY) == pdPASS)
+            {
+                uart_puts("Command MOVE Y to position ");
+                uart_putdec(y_target);
+                uart_puts(" received.\r\n\n");
+
+                set_y_pwm_period(2500);
+
+                move_y(y_target);
+
+                uart_puts("Target position reached.\r\n\n");
+
+                fsm_transition(IDLE);
+            }
+            break;
+        case 3:
+            uart_puts("Command MOVE X and Y received.\r\n");
+            if (xQueueReceive(cmd_queue, &x_target, portMAX_DELAY) == pdPASS)
+            {
+                uart_puts("MOVE X to position ");
+                uart_putdec(x_target);
+                uart_puts(".\r\n\n");
+                flag_x_target_received = 1;
+            }
+            if (xQueueReceive(cmd_queue, &y_target, portMAX_DELAY) == pdPASS)
+            {
+                uart_puts("MOVE Y to position ");
+                uart_putdec(y_target);
+                uart_puts(".\r\n\n");
+                flag_y_target_received = 1;
+            }
+
+            if(flag_x_target_received && flag_y_target_received)
+            {
+                flag_x_target_received = 0;
+                flag_y_target_received = 0;
+                set_x_pwm_period(2500);
+                set_y_pwm_period(2500);
+                move_x_y(x_target, y_target);
+                uart_puts("Target position reached.\r\n\n");
+                fsm_transition(IDLE);
+            }
+            break;
+    }
+}
+
+/**
+ * @brief Update the FSM state (do transition)
+ *
+ * @param state New state for the FSM
+ */
+static void fsm_transition(uint state)
+{
+    fsm_state    = state;
+    return;
+}
+
+//Go to X position pos_encoder_target based on encoder, verification via encoder
+void move_x(int pos_encoder_target)
+{
+    if(pos_encoder_target > 31745 || pos_encoder_target < 0)
+    {
+        uart_puts("Error, target position not whithin range.\r\n");
+        return;
+    }
+    int delta = pos_encoder_target - pos_x;
+
+    if (delta > 0)
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 0));         //PC0 HIGH, set X direction to right
+        if ((delta + pos_x) > 31745)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+
+        reg16_set((u32)TIM2_CCER, (1 << 0));        //Enable X PWM
+
+        while (pos_x < pos_encoder_target)         //Wait until reaching target position
+        {
+        }
+
+        reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+
+    }
+    else
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 16));         //PC0 LOW, set X direction to left
+        delta = -delta;
+
+        if (delta > pos_x)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+
+        reg16_set((u32)TIM2_CCER, (1 << 0));        //Enable X PWM
+
+        while (pos_x > pos_encoder_target);          //Wait until reaching target position
+
+        reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+    }
+}
+
+//Go to Y position pos_encoder_target based on encoder, verification via encoder
+void move_y(int pos_encoder_target)
+{
+    if(pos_encoder_target > 31745 || pos_encoder_target < 0)
+    {
+        uart_puts("Error, target position not whithin range.\r\n");
+        return;
+    }
+    int delta = pos_encoder_target - pos_y;
+
+    if (delta > 0)
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 1));         //PC1 HIGH, set Y direction to UP
+        if ((delta + pos_y) > 31745)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+
+        reg16_set((u32)TIM5_CCER, (1 << 4));        //Enable Y PWM
+
+        while (pos_y < pos_encoder_target)         //Wait until reaching target position
+        {
+        }
+
+        reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+
+    }
+    else
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 17));         //PC1 LOW, set Y direction to DOWN
+        delta = -delta;
+
+        if (delta > pos_y)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+
+        reg16_set((u32)TIM5_CCER, (1 << 4));        //Enable Y PWM
+
+        while (pos_y > pos_encoder_target);          //Wait until reaching target position
+
+        reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+    }
+}
+
+void move_x_y(int pos_x_target, int pos_y_target)
+{
+    if(pos_x_target > 31745 || pos_x_target < 0 || pos_y_target > 31745 || pos_y_target < 0)
+    {
+        uart_puts("Error, target position not whithin range.\r\n");
+        return;
+    }
+    int delta_x = pos_x_target - pos_x;
+    int delta_y = pos_y_target - pos_y;
+
+    if(delta_x > 0)
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 0));         //PC0 HIGH, set X direction to right
+        if ((delta_x + pos_x) > 31745)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+    }
+    else
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 16));         //PC0 LOW, set X direction to left
+        uart_puts("\r\nX NO BUG\r\n");
+        delta_x = -delta_x;
+
+        if (delta_x > pos_x)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+        delta_x = -delta_x;
+    }
+
+    if(delta_y > 0)
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 1));         //PC1 HIGH, set Y direction to UP
+        if ((delta_y + pos_y) > 31745)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+    }
+    else
+    {
+        reg_set((u32)GPIOC_BSRR, (1 << 17));         //PC1 LOW, set Y direction to DOWN
+        delta_y = -delta_y;
+
+        if (delta_y > pos_y)
+        {
+            uart_puts("Error, target position exceeds limits.\r\n");
+            return;
+        }
+        delta_y = -delta_y;
+    }
+
+    if(delta_x > 0)
+    {
+        if(delta_y > 0)
+        {
+            //CAS 1 X FW Y FW
+            uart_puts("X forward, Y forward.\r\n");
+            reg16_set((u32)TIM2_CCER, (1 << 0));        //Enable X PWM
+            reg16_set((u32)TIM5_CCER, (1 << 4));        //Enable Y PWM
+
+            while((pos_x < pos_x_target) && (pos_y < pos_y_target));    //Wait until one of them reaches destination
+
+            if (pos_x >= pos_x_target)           //X is done first
+            {
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+
+                while(pos_y < pos_y_target);    //Wait for Y
+
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+                return;
+
+            }
+            else if(pos_y >= pos_y_target)       //Y is done first
+            {
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+
+                while(pos_x < pos_x_target);    //Wait for X
+
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+                return;
+            }
+        }
+        else
+        {
+            //CAS 2 X FW Y BW
+            uart_puts("X forward, Y backward.\r\n");
+            reg16_set((u32)TIM2_CCER, (1 << 0));        //Enable X PWM
+            reg16_set((u32)TIM5_CCER, (1 << 4));        //Enable Y PWM
+
+            while((pos_x < pos_x_target) && (pos_y > pos_y_target));    //Wait until one of them reaches destination
+
+            if (pos_x >= pos_x_target)           //X is done first
+            {
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+
+                while(pos_y > pos_y_target);    //Wait for Y
+
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+                return;
+
+            }
+            else if(pos_y <= pos_y_target)       //Y is done first
+            {
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+
+                while(pos_x < pos_x_target);    //Wait for X
+
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+                return;
+            }
+        }
+    }
+    else
+    {
+        if (delta_y > 0)
+        {
+            //CAS 3 X BW Y FW
+            uart_puts("X backward, Y forward.\r\n");
+            reg16_set((u32)TIM2_CCER, (1 << 0));        //Enable X PWM
+            reg16_set((u32)TIM5_CCER, (1 << 4));        //Enable Y PWM
+
+            while((pos_x > pos_x_target) && (pos_y < pos_y_target));    //Wait until one of them reaches destination
+
+            if (pos_x <= pos_x_target)           //X is done first
+            {
+                //uart_puts("X is done first.\r\n");
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+
+                while(pos_y < pos_y_target);    //Wait for Y
+
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+                return;
+
+            }
+            else if(pos_y >= pos_y_target)       //Y is done first
+            {
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+
+                while(pos_x > pos_x_target);    //Wait for X
+
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+                return;
+            }
+        }
+        else
+        {
+            //CAS 4 X BW Y BW
+            uart_puts("X backward, Y backward.\r\n");
+            reg16_set((u32)TIM2_CCER, (1 << 0));        //Enable X PWM
+            reg16_set((u32)TIM5_CCER, (1 << 4));        //Enable Y PWM
+
+            while((pos_x > pos_x_target) && (pos_y > pos_y_target));    //Wait until one of them reaches destination
+
+            if (pos_x <= pos_x_target)           //X is done first
+            {
+                //uart_puts("X is done first.\r\n");
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+
+                while(pos_y > pos_y_target);    //Wait for Y
+
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+                return;
+
+            }
+            else if(pos_y <= pos_y_target)       //Y is done first
+            {
+                reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+
+                while(pos_x > pos_x_target);    //Wait for X
+
+                reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+                return;
+            }
+        }
+    }
+}
+
+void pnp_init_zero(void)
+{
+    reg_set((u32)GPIOC_BSRR, (1 << 16));         //PC0 LOW, set X direction to left
+    reg_set((u32)GPIOC_BSRR, (1 << 17));         //PC1 LOW, set Y direction to DOWN
+
+    set_x_pwm_period(3200);
+    set_y_pwm_period(3200);
+
+    reg16_set((u32)TIM2_CCER, (1 << 0));        //Enable X PWM
+    reg16_set((u32)TIM5_CCER, (1 << 4));        //Enable Y PWM
+    
+    while(1)
+    {
+    while((reg_rd(GPIO_IDR(GPIOC)) & (1 << 10)) != 0 && (reg_rd(GPIO_IDR(GPIOC)) & (1 << 11)) != 0);    //Wait until one of them reaches end
+
+    if((reg_rd(GPIO_IDR(GPIOC)) & (1 << 10)) == 0)  //X reached end first
+    {
+        reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+
+        while((reg_rd(GPIO_IDR(GPIOC)) & (1 << 11)) != 0);  //Wait for Y to reach end
+
+        reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+
+
+    }
+    else if((reg_rd(GPIO_IDR(GPIOC)) & (1 << 11)) == 0) //Y reached end first
+    {
+        reg16_clr((u32)TIM5_CCER, (1 << 4));        //Disable Y PWM
+
+        while((reg_rd(GPIO_IDR(GPIOC)) & (1 << 10)) != 0);  //Wait for X to reach end
+
+        reg16_clr((u32)TIM2_CCER, (1 << 0));        //Disable X PWM
+    }
+    else                                            //In case of switch bounce loop again
+        continue;
+    break;
+    }
+
+
 }
 
 /**

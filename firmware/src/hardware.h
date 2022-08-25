@@ -71,6 +71,7 @@
 #define CM7_ACR       0xE000EF90
 
 #define TIM1_CR1    (TIM1 + 0x00)
+#define TIM1_SMCR   (TIM1 + 0x08)
 #define TIM1_DIER   (TIM1 + 0x0C)
 #define TIM1_EGR    (TIM1 + 0x14)
 #define TIM1_CCMR1  (TIM1 + 0x18)

@@ -19,26 +19,31 @@
 #include "time.h"
 #include <string.h>
 #include <math.h>
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "uart.h"
 
 void delay_us(int us);
 void delay_rtos(int ms);
 void task_console(void *pvParameters);
-static void init_uart(void);
-static void uart_putc(char c);
-void uart_puts (char *s);
-int uart_getc(unsigned char *c);
 void nozzle_reset(void);
 void nozzle_down_1(void);
+void nozzle_down_2(void);
+void nozzle_rot_1(void);
+void nozzle_rot_2(void);
+
 
 #define BUFFER_SIZE 1024
-static u8 buffer[BUFFER_SIZE];
+u8 buffer[BUFFER_SIZE];
 u8 rx_buffer[BUFFER_SIZE];
 char cmd_buffer[BUFFER_SIZE];
 char cmd_buffer_old[BUFFER_SIZE];
-static int buffer_r, buffer_w;
+int buffer_r, buffer_w;
 volatile int i_rx_buff, i_rx_buff2, i_cmd;
 
 int target_pos_x = 0, target_pos_y = 0;
+extern xQueueHandle cmd_queue;
+extern int pos_x, pos_y;
 
 void task_console(void *pvParameters)
 {
@@ -46,6 +51,7 @@ void task_console(void *pvParameters)
 
     char flag_cmd=0;
     char flag_esc_seq=0;
+    int cmd_id=0;
 
     //u8 cmd_string[1024];
 
@@ -69,6 +75,29 @@ void task_console(void *pvParameters)
                     uart_puts(cmd_buffer);
                     i_cmd = strlen(cmd_buffer);
                 }
+                else if(flag_esc_seq==2 && rx_buffer[i_rx_buff2] == 'B')    //Down arrow
+                {
+                    uart_puts("\033[2K");               //Clears line
+                    uart_puts("\033[G");                //Cursor column 1
+                    i_cmd = 0;
+                }
+                else if(flag_esc_seq==2 && rx_buffer[i_rx_buff2] == 'C')    //Right arrow
+                {
+                    uart_puts("\033[1C");
+                    if(i_cmd < 70)
+                    {
+                        i_cmd++;
+                    }
+                }
+                else if(flag_esc_seq==2 && rx_buffer[i_rx_buff2] == 'D')    //Left arrow
+                {
+                    uart_puts("\033[1D");
+                    if(i_cmd > 0)
+                    {
+                        i_cmd--;
+                    }
+                }
+
                 else
                     flag_esc_seq = 0;
             }
@@ -153,6 +182,10 @@ void task_console(void *pvParameters)
                             uart_puts("MOVE X AND Y DETECTED\r\n");
                             //x_goto_2(target_pos_x);
                             //y_goto_2(target_pos_y);
+                            cmd_id = 3;
+                            xQueueSendToBack(cmd_queue, &cmd_id, portMAX_DELAY);
+                            xQueueSendToBack(cmd_queue, &x_decimal, portMAX_DELAY);
+                            xQueueSendToBack(cmd_queue, &y_decimal, portMAX_DELAY);                            
 
                         }
                         else
@@ -165,6 +198,9 @@ void task_console(void *pvParameters)
                             }
                             target_pos_x=x_decimal;
                             uart_puts("MOVE ONLY X DETECTED\r\n");
+                            cmd_id = 1;
+                            xQueueSendToBack(cmd_queue, &cmd_id, portMAX_DELAY);
+                            xQueueSendToBack(cmd_queue, &x_decimal, portMAX_DELAY);
                             //x_goto_2(target_pos_x);
                         }
                     }
@@ -178,6 +214,9 @@ void task_console(void *pvParameters)
                         }
                         target_pos_y=y_decimal;
                         uart_puts("MOVE ONLY Y DETECTED\r\n");
+                        cmd_id = 2;
+                        xQueueSendToBack(cmd_queue, &cmd_id, portMAX_DELAY);
+                        xQueueSendToBack(cmd_queue, &y_decimal, portMAX_DELAY);
                         //y_goto_2(target_pos_y);
                     }
                     else
@@ -232,7 +271,7 @@ void task_console(void *pvParameters)
                         }
                         else if(strncmp(args2, "2", 1)==0)
                         {
-                            //nozzle_down_2();
+                            nozzle_down_2();
                         }
                     }
                     else if(strncmp(args, "up ", 3) == 0)
@@ -268,6 +307,7 @@ void task_console(void *pvParameters)
                                     z_decimal += (args3[i]-'0')*pow(10,z_digits-1-i);
                                 }
                                 uart_puts("ROTATE NOZZLE 1 DETECTED\r\n");
+                                nozzle_rot_1();
                             }
                         }
                         else if(strncmp(args2, "2", 1) == 0)
@@ -282,6 +322,7 @@ void task_console(void *pvParameters)
                                     z_decimal += (args3[i]-'0')*pow(10,z_digits-1-i);
                                 }
                                 uart_puts("ROTATE NOZZLE 2 DETECTED\r\n");
+                                nozzle_rot_2();
                             }
                         }
                     }
@@ -317,6 +358,15 @@ void task_console(void *pvParameters)
                     //while(1)
                     //amazing_square();
                 }
+                else if (strcmp(cmd_buffer, "pos") == 0)
+                {
+                    uart_puts("X position : ");
+                    uart_putdec(pos_x);
+                    uart_puts("\r\n");
+                    uart_puts("Y position : ");
+                    uart_putdec(pos_y);
+                    uart_puts("\r\n");
+                } 
 
             }
             if(strcmp(cmd_buffer, "\0") != 0)
@@ -332,52 +382,6 @@ void task_console(void *pvParameters)
     }
 }
 
-static void init_uart(void)
-{
-    u32 val;
-
-      /* Activate GPIO controller(s) */
-    val = reg_rd((u32)RCC_AHB1ENR);
-    val |= (1 << 4); /* GPIO-E */
-    reg_wr((u32)RCC_AHB1ENR, val);
-
-    val = reg_rd((u32)GPIOE_MODER);
-    val |= (2 << 14);                 //PE7 alternate function mode
-    reg_wr((u32)GPIOE_MODER, val); 
-
-    val = reg_rd((u32)GPIOE_MODER);
-    val |= (2 << 16);                 //PE8 alternate function mode
-    reg_wr((u32)GPIOE_MODER, val); 
-
-    val = reg_rd((u32)GPIOE_AFRL);
-    val |= (8 << 28);                    //AF8 (UART7_Rx) on PE7
-    reg_wr((u32)GPIOE_AFRL, val);
-
-    val = reg_rd((u32)GPIOE_AFRH);
-    val |= (8 << 0);                     //AF8 (UART7_Tx) on PE8
-    reg_wr((u32)GPIOE_AFRH, val);
-
-    val = reg_rd((u32)RCC_APB1ENR);     //UART7 Enable
-    val |= (1 << 30);
-    reg_wr((u32)RCC_APB1ENR, val);
-
-    reg_wr(UART_BRR, 139); /* 115200 @ 16MHz       */
-
-    reg_wr(UART_CR1,   0x0C); /* Set TE & RE bits     */
-    reg_wr(UART_CR1,   0x0D); /* Set USART Enable bit */
-
-    buffer_r = 0;
-    buffer_w = 0;
-
-    i_rx_buff = 0;
-    i_rx_buff2 = 0;
-
-    i_cmd = 0;
-
-    reg_wr(0xE000E108, (1 << 18)); /* USART7 NVIC */
-
-    reg_set(UART_CR1, (1 << 5));    //RXNE interupt enable
-}
 
 /**
  * @brief Interrupt handler
@@ -418,7 +422,7 @@ void UART7_IRQHandler(void)
 
 void nozzle_down_1(void)
 {
-    reg_set((u32)GPIOF_BSRR, (1 << 13));     //Left nozzle
+    reg_set((u32)GPIOF_BSRR, (1 << 13));     //Left nozzle down
 
     for (int i = 0; i < 125; i++) 
     {
@@ -428,6 +432,48 @@ void nozzle_down_1(void)
         delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
     }
 
+}
+
+void nozzle_down_2(void)
+{
+    reg_set((u32)GPIOF_BSRR, (1 << 29));     //Right nozzle down
+
+    for (int i = 0; i < 125; i++) 
+    {
+        reg_set((u32)GPIOA_BSRR, (1 << 6));     //ROT1-NOZZLE_CLK HIGH
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+        reg_set((u32)GPIOA_BSRR, (1 << 22));    //ROT1-NOZZLE_CLK LOW
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+    }
+}
+
+void nozzle_rot_1(void)
+{
+    //reg_set((u32)GPIOF_BSRR, (1 << 15)); //Counter-Clockwise
+    reg_set((u32)GPIOF_BSRR, (1 << 31));   //Clockwise
+
+
+    for (int i = 0; i < 125; i++) 
+    {
+        reg_set((u32)GPIOA_BSRR, (1 << 7));     //ROT1-NOZZLE_CLK HIGH
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+        reg_set((u32)GPIOA_BSRR, (1 << 23));    //ROT1-NOZZLE_CLK LOW
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+    }
+}
+
+void nozzle_rot_2(void)
+{
+    //reg_set((u32)GPIOF_BSRR, (1 << 14));   //Counter-Clockwise
+    reg_set((u32)GPIOF_BSRR, (1 << 30));     //Clockwise
+
+    for (int i = 0; i < 125; i++) 
+    {
+        reg_set((u32)GPIOB_BSRR, (1 << 0));     //ROT1-NOZZLE_CLK HIGH
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+        reg_set((u32)GPIOB_BSRR, (1 << 16));    //ROT1-NOZZLE_CLK LOW
+        delay_us(1000); //Choose the half-period in us of the signal. Lower = Faster motor
+    }
 }
 
 void nozzle_reset(void)
@@ -441,67 +487,3 @@ void nozzle_reset(void)
 
 
 
-static void uart_putc(char c)
-{
-    int next;
-    int use_isr;
-
-    /* Tests if UART interrupt is active into NVIC */
-    use_isr = (reg_rd(0xE000E108) & (1 << 18)) ? 1 : 0; /* USART7 */
-
-    /* If UART interrupt is active, put byte into TX buffer */
-    if (use_isr)
-    {
-        next = (buffer_w + 1);
-        if (next > (BUFFER_SIZE-1))
-            next = 0;
-        if (next == buffer_r)
-            return;
-        buffer[buffer_w] = c;
-        buffer_w = next;
-        reg_set(UART_CR1, (1 << 7));
-    }
-    /* UART interrupt is inactive, use synchronous write to uart */
-    else
-    {
-        while ((reg_rd(UART_ISR) & (1 << 7)) == 0)
-            ;
-        reg_wr(UART_TDR, c);
-    }
-}
-
-/**
- * @brief Send a text string to UART
- *
- * @param s Pointer to the string to send
- */
-void uart_puts (char *s)
-{
-    while (*s)
-    {
-        uart_putc(*s);
-        s++;
-    }
-}
-
-/**
- * @brief Read one byte received on UART
- *
- * @param c Pointer to a byte variable where to store recived data
- * @return True if a byte has been received, False if no data available
- */
-int uart_getc(unsigned char *c)
-{
-    unsigned char rx;
-
-    if (reg_rd(UART_ISR) & (1 << 5))
-    {
-        /* Get the received byte from RX fifo */
-        rx = reg_rd(UART_RDR);
-        /* If a data pointer has been defined, copy received byte */
-        if (c)
-            *c = rx;
-        return(1);
-    }
-    return (0);
-}

@@ -16,7 +16,7 @@
 TARGET = fw-pnp
 
 ASRC = stm32f746xx.s
-SRC  = main.c console.c hardware.c time.c
+SRC  = main.c console.c hardware.c time.c uart.c motor.c
 
 SRC_RTOS =  heap_1.c list.c queue.c tasks.c timers.c
 SRC_RTOS += stm32f7_port.c
