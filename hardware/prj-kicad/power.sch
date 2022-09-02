@@ -3,12 +3,12 @@ EELAYER 30 0
 EELAYER END
 $Descr A4 11693 8268
 encoding utf-8
-Sheet 2 7
-Title "Cartes V3 - Power supply"
-Date "2018-11-12"
-Rev "0.3"
-Comp "Adial"
-Comment1 "Designed by Agilack"
+Sheet 2 9
+Title "Power supply"
+Date "2022-09-01"
+Rev "0.2"
+Comp "Agilack"
+Comment1 ""
 Comment2 ""
 Comment3 ""
 Comment4 ""

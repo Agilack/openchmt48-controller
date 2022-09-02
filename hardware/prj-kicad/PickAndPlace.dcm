@@ -53,6 +53,10 @@ D Zener diode
 K DIODE ZENER
 $ENDCMP
 #
+$CMP GNDPWR
+K POWER, PWR
+$ENDCMP
+#
 $CMP LM1117-1.8
 D 800mA Low-Dropout Linear Regulator, 1.8V fixed output, TO-220/TO-252/TO-263/SOT-223
 K linear regulator ldo fixed positive
@@ -75,6 +79,11 @@ $CMP LM1117-5.0
 D 800mA Low-Dropout Linear Regulator, 5.0V fixed output, TO-220/TO-252/TO-263/SOT-223
 K linear regulator ldo fixed positive
 F http://www.ti.com/lit/ds/symlink/lm1117.pdf
+$ENDCMP
+#
+$CMP NPN_2SCR533P_HZG
+D General purpose NPN transistor
+K TRANSISTOR NPN
 $ENDCMP
 #
 $CMP Q_NPN

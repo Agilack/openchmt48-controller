@@ -3,7 +3,7 @@ EELAYER 30 0
 EELAYER END
 $Descr A4 11693 8268
 encoding utf-8
-Sheet 4 7
+Sheet 4 9
 Title ""
 Date ""
 Rev ""
@@ -27,12 +27,12 @@ $EndComp
 $Comp
 L PickAndPlace:STM32F745ZX U1
 U 2 1 60AF6C37
-P 5800 1850
-F 0 "U1" H 5800 2865 60  0000 C CNN
-F 1 "STM32F745ZX" H 5800 2770 45  0000 C CNN
-F 2 "PickAndPlace:TQFP144" H 5800 1850 60  0001 C CNN
-F 3 "" H 5800 1850 60  0000 C CNN
-	2    5800 1850
+P 5450 1850
+F 0 "U1" H 5450 2865 60  0000 C CNN
+F 1 "STM32F745ZX" H 5450 2770 45  0000 C CNN
+F 2 "PickAndPlace:TQFP144" H 5450 1850 60  0001 C CNN
+F 3 "" H 5450 1850 60  0000 C CNN
+	2    5450 1850
 	1    0    0    -1  
 $EndComp
 $Comp
@@ -1250,11 +1250,11 @@ Text GLabel 1450 1200 0    50   Output ~ 0
 Y_CLK_3v3
 Text GLabel 1450 1300 0    50   Output ~ 0
 Rub_CLK_3v3
-Text GLabel 5000 1100 0    50   Output ~ 0
+Text GLabel 4650 1100 0    50   Output ~ 0
 X_DIR_3v3
-Text GLabel 5000 1200 0    50   Output ~ 0
+Text GLabel 4650 1200 0    50   Output ~ 0
 Y_DIR_3v3
-Text GLabel 5000 1300 0    50   Output ~ 0
+Text GLabel 4650 1300 0    50   Output ~ 0
 Rub_DIR_3v3
 Text GLabel 2950 1100 2    50   Output ~ 0
 Rot-Noz2_CLK_3v3
@@ -1287,11 +1287,11 @@ Wire Wire Line
 Wire Wire Line
 	8500 2650 8600 2650
 Wire Wire Line
-	5000 1100 5150 1100
+	4650 1100 4800 1100
 Wire Wire Line
-	5000 1200 5150 1200
+	4650 1200 4800 1200
 Wire Wire Line
-	5000 1300 5150 1300
+	4650 1300 4800 1300
 Text GLabel 1450 1600 0    50   Output ~ 0
 BCD_ENABLE
 Text GLabel 1450 1500 0    50   Output ~ 0
@@ -1316,14 +1316,14 @@ Wire Wire Line
 	2950 2400 2850 2400
 Wire Wire Line
 	2950 2300 2850 2300
-Text GLabel 5000 2100 0    50   Input ~ 0
+Text GLabel 4650 2100 0    50   Input ~ 0
 X_lim
-Text GLabel 5000 2200 0    50   Input ~ 0
+Text GLabel 4650 2200 0    50   Input ~ 0
 Y_lim
 Wire Wire Line
-	5000 2100 5150 2100
+	4650 2100 4800 2100
 Wire Wire Line
-	5000 2200 5150 2200
+	4650 2200 4800 2200
 Text GLabel 9450 1800 0    50   BiDi ~ 0
 Add_IO1
 Wire Wire Line
@@ -1348,10 +1348,10 @@ Text GLabel 9450 2300 0    50   BiDi ~ 0
 Add_IO6
 Wire Wire Line
 	9600 2300 9450 2300
-Text GLabel 5000 2000 0    50   BiDi ~ 0
+Text GLabel 4650 2000 0    50   BiDi ~ 0
 Add_IO7
 Wire Wire Line
-	5150 2000 5000 2000
+	4800 2000 4650 2000
 Text GLabel 1400 1900 0    50   BiDi ~ 0
 Add_IO8
 Wire Wire Line
@@ -1372,4 +1372,40 @@ Text GLabel 1400 2300 0    50   BiDi ~ 0
 Add_IO12
 Wire Wire Line
 	1550 2300 1400 2300
+Text GLabel 6150 2400 2    50   Output ~ 0
+VACUUM_PWM
+Text GLabel 6150 2300 2    50   Output ~ 0
+BLOW_PWM
+Wire Wire Line
+	6100 2300 6150 2300
+Wire Wire Line
+	6100 2400 6150 2400
+Text GLabel 4650 1600 0    50   Input ~ 0
+LEFT_NOZZLE_PRESSURE
+Text GLabel 4650 1500 0    50   Input ~ 0
+RIGHT_NOZZLE_PRESSURE
+Wire Wire Line
+	4650 1500 4800 1500
+Wire Wire Line
+	4650 1600 4800 1600
+Text GLabel 6150 2100 2    50   Output ~ 0
+Upward_light
+Text GLabel 6150 2000 2    50   Output ~ 0
+Downward_light
+Text GLabel 6150 1900 2    50   Output ~ 0
+Valve_left
+Text GLabel 2950 2600 2    50   Output ~ 0
+Valve_right
+Text GLabel 2950 2500 2    50   Output ~ 0
+Needle
+Wire Wire Line
+	2850 2500 2950 2500
+Wire Wire Line
+	2850 2600 2950 2600
+Wire Wire Line
+	6100 1900 6150 1900
+Wire Wire Line
+	6100 2000 6150 2000
+Wire Wire Line
+	6100 2100 6150 2100
 $EndSCHEMATC
