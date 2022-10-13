@@ -54,7 +54,7 @@ void task_console(void *pvParameters)
     int cmd_id=0;
 
     //u8 cmd_string[1024];
-
+    uart_puts("[TASK_CONSOLE] while 1\r\n");
     while(1)
     {
         if(i_rx_buff != i_rx_buff2)

@@ -16,13 +16,26 @@
 #ifndef PNP_H
 #define PNP_H
 
-#define IDLE 0
-#define HEAD_MOVE 1
-#define NOZZLE_MOVE 2
-#define AIR_PUMP 3
-#define HOOK 4
+#define IDLE                0
+#define PROCESS_COMP        1
+#define HEAD_TO_TRAY_RIB    2
+#define NEEDLE_DOWN         3
+#define HEAD_PULL_RIB       4
+#define NEEDLE_UP           5
+#define PULL_RIB_COVER      6
+#define HEAD_TO_TRAY        7
+#define NOZZLE_TAKE_DOWN    8
+#define PUMP_VACUUM         9
+#define NOZZLE_TAKE_UP      10
+#define HEAD_TO_DELIVER     11
+#define NOZZLE_ROTATE       12
+#define NOZZLE_DELIVER_DOWN 13
+#define PUMP_BLOW           14
+#define NOZZLE_DELIVER_UP   15
+#define HEAD_TO_PARK        16
 
-void fsm_idle(void);
-void fsm_head_move(void);
+#define STOP                100
+
+void pnp_init_zero(void);
 
 #endif
